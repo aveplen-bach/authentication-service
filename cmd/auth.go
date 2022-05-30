@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,11 +12,7 @@ import (
 
 	"github.com/aveplen-bach/authentication-service/internal/controller"
 	"github.com/aveplen-bach/authentication-service/internal/model"
-	face_recognition_service "github.com/aveplen-bach/authentication-service/protos/facerec"
-	s3_grpc_gateway "github.com/aveplen-bach/authentication-service/protos/s3g"
 	"github.com/gin-gonic/gin"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -32,40 +27,40 @@ func main() {
 
 	db.AutoMigrate(&model.User{})
 
-	// ============================== frs client ==============================
+	// // ============================== frs client ==============================
 
-	frDialContext, frCancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer frCancel()
+	// frDialContext, frCancel := context.WithTimeout(context.Background(), 1*time.Second)
+	// defer frCancel()
 
-	frsAddress := "localhost:7070"
-	frconn, err := grpc.DialContext(frDialContext, frsAddress, []grpc.DialOption{
-		grpc.WithBlock(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	}...)
+	// frsAddress := "localhost:7070"
+	// frconn, err := grpc.DialContext(frDialContext, frsAddress, []grpc.DialOption{
+	// 	grpc.WithBlock(),
+	// 	grpc.WithTransportCredentials(insecure.NewCredentials()),
+	// }...)
 
-	if err != nil {
-		log.Printf("Failed to connect to %s \n", frsAddress)
-	}
+	// if err != nil {
+	// 	log.Printf("Failed to connect to %s \n", frsAddress)
+	// }
 
-	frc := face_recognition_service.NewFaceRecognitionClient(frconn)
+	// frc := face_recognition_service.NewFaceRecognitionClient(frconn)
 
-	// ============================== s3g client ==============================
+	// // ============================== s3g client ==============================
 
-	s3DialContext, s3Cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer s3Cancel()
+	// s3DialContext, s3Cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	// defer s3Cancel()
 
-	s3gAddress := "localhost:9090"
-	s3gconn, err := grpc.DialContext(s3DialContext, s3gAddress, []grpc.DialOption{
-		grpc.WithBlock(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	}...)
+	// s3gAddress := "localhost:9090"
+	// s3gconn, err := grpc.DialContext(s3DialContext, s3gAddress, []grpc.DialOption{
+	// 	grpc.WithBlock(),
+	// 	grpc.WithTransportCredentials(insecure.NewCredentials()),
+	// }...)
 
-	if err != nil {
-		log.Printf("Failed to connect to %s \n", s3gAddress)
-	}
+	// if err != nil {
+	// 	log.Printf("Failed to connect to %s \n", s3gAddress)
+	// }
 
-	s3gc := s3_grpc_gateway.NewS3GatewayClient(s3gconn)
-	fmt.Println(s3gc)
+	// s3gc := s3_grpc_gateway.NewS3GatewayClient(s3gconn)
+	// fmt.Println(s3gc)
 
 	// ================================ router ================================
 
@@ -73,8 +68,20 @@ func main() {
 
 	// =============================== handlers ===============================
 
-	loginController := controller.NewLoginController(db, frc)
-	registerController := controller.NewRegisterController(db, frc)
+	// login := controller.NewLoginController(db, frc)
+	// register := controller.NewRegisterController(db, frc)
+
+	login := controller.LoginController{
+		Db: db,
+	}
+
+	register := controller.RegisterController{
+		Db: db,
+	}
+
+	users := controller.UserController{
+		Db: db,
+	}
 
 	// ================================ routes ================================
 
@@ -85,8 +92,9 @@ func main() {
 		c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, DELETE")
 	})
 
-	router.POST("/api/v1/login", loginController.Login)
-	router.GET("/api/v1/register", registerController.Register)
+	router.POST("/api/v1/login", login.Post)
+	router.GET("/api/v1/register", register.Get)
+	router.GET("/api/v1/users", users.Get)
 	router.GET("/", controller.Index)
 
 	// =============================== shutdown ===============================

@@ -8,19 +8,19 @@ import (
 	"gorm.io/gorm"
 )
 
-type loginController struct {
-	db  *gorm.DB
+type LoginController struct {
+	Db  *gorm.DB
 	frc pb.FaceRecognitionClient
 }
 
-func NewLoginController(db *gorm.DB, frc pb.FaceRecognitionClient) *loginController {
-	return &loginController{
-		db:  db,
+func NewLoginController(db *gorm.DB, frc pb.FaceRecognitionClient) *LoginController {
+	return &LoginController{
+		Db:  db,
 		frc: frc,
 	}
 }
 
-func (l *loginController) Login(c *gin.Context) {
+func (l *LoginController) Post(c *gin.Context) {
 	c.Header("Access-Control-Allow-Origin", "http://localhost:8080")
 	c.Header("Access-Control-Allow-Credentials", "true")
 	c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
