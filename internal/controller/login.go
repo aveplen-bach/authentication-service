@@ -1,22 +1,20 @@
 package controller
 
 import (
-	"fmt"
+	"net/http"
 
-	pb "github.com/aveplen-bach/authentication-service/protos/facerec"
+	"github.com/aveplen-bach/authentication-service/internal/model"
+	"github.com/aveplen-bach/authentication-service/internal/service"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type LoginController struct {
-	Db  *gorm.DB
-	frc pb.FaceRecognitionClient
+	service *service.Service
 }
 
-func NewLoginController(db *gorm.DB, frc pb.FaceRecognitionClient) *LoginController {
+func NewLoginController(service *service.Service) *LoginController {
 	return &LoginController{
-		Db:  db,
-		frc: frc,
+		service: service,
 	}
 }
 
@@ -26,8 +24,14 @@ func (l *LoginController) Post(c *gin.Context) {
 	c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 	c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, DELETE")
 
-	req := &gin.H{}
+	req := &model.LoginRequest{}
 	c.BindJSON(req)
-	fmt.Println(*req)
-	c.SetCookie("jwt_token", "hello, I'm jwt-token", 3600, "/", "localhost", false, true)
+
+	res, err := l.service.Login(req)
+
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+	}
+
+	c.JSON(http.StatusOK, res)
 }

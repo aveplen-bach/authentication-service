@@ -12,6 +12,7 @@ import (
 
 	"github.com/aveplen-bach/authentication-service/internal/controller"
 	"github.com/aveplen-bach/authentication-service/internal/model"
+	"github.com/aveplen-bach/authentication-service/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -71,10 +72,6 @@ func main() {
 	// login := controller.NewLoginController(db, frc)
 	// register := controller.NewRegisterController(db, frc)
 
-	login := controller.LoginController{
-		Db: db,
-	}
-
 	register := controller.RegisterController{
 		Db: db,
 	}
@@ -82,6 +79,20 @@ func main() {
 	users := controller.UserController{
 		Db: db,
 	}
+
+	// =============================== services ===============================
+
+	tokenService := service.NewTokenService()
+
+	srvc := &service.Service{
+		Db:      db,
+		Session: service.NewSessionService(),
+		Facerec: nil,
+		Token:   tokenService,
+		S3:      nil,
+	}
+
+	login := controller.NewLoginController(srvc)
 
 	// ================================ routes ================================
 
@@ -95,6 +106,28 @@ func main() {
 	router.POST("/api/v1/login", login.Post)
 	router.GET("/api/v1/register", register.Get)
 	router.GET("/api/v1/users", users.Get)
+
+	router.GET("/api/v1/debug-token", func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "http://localhost:8080")
+		c.Header("Access-Control-Allow-Credentials", "true")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, DELETE")
+
+		tok, err := tokenService.GenerateToken(&model.User{
+			Username: "username",
+			Password: "password",
+			FFVector: "3,3;4,4;5,5",
+		})
+
+		if err != nil {
+			panic(err)
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"token": tok,
+		})
+	})
+
 	router.GET("/", controller.Index)
 
 	// =============================== shutdown ===============================
