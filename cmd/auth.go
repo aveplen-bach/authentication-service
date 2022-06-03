@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,9 +12,15 @@ import (
 	"time"
 
 	"github.com/aveplen-bach/authentication-service/internal/controller"
+	"github.com/aveplen-bach/authentication-service/internal/middleware"
 	"github.com/aveplen-bach/authentication-service/internal/model"
 	"github.com/aveplen-bach/authentication-service/internal/service"
+	"github.com/aveplen-bach/authentication-service/protos/facerec"
+	"github.com/aveplen-bach/authentication-service/protos/s3file"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -28,107 +35,61 @@ func main() {
 
 	db.AutoMigrate(&model.User{})
 
-	// // ============================== frs client ==============================
+	// ============================== fr client ===============================
 
-	// frDialContext, frCancel := context.WithTimeout(context.Background(), 1*time.Second)
-	// defer frCancel()
+	frDialContext, frCancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer frCancel()
 
-	// frsAddress := "localhost:7070"
-	// frconn, err := grpc.DialContext(frDialContext, frsAddress, []grpc.DialOption{
-	// 	grpc.WithBlock(),
-	// 	grpc.WithTransportCredentials(insecure.NewCredentials()),
-	// }...)
+	frAddr := "localhost:8081"
+	frcc, err := grpc.DialContext(frDialContext, frAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
 
-	// if err != nil {
-	// 	log.Printf("Failed to connect to %s \n", frsAddress)
-	// }
+	if err != nil {
+		logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", frAddr, err))
+	}
 
-	// frc := face_recognition_service.NewFaceRecognitionClient(frconn)
+	fr := facerec.NewFaceRecognitionClient(frcc)
+	logrus.Warn(fr)
 
-	// // ============================== s3g client ==============================
+	// ============================== s3g client ==============================
 
-	// s3DialContext, s3Cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	// defer s3Cancel()
+	s3DialContext, s3Cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer s3Cancel()
 
-	// s3gAddress := "localhost:9090"
-	// s3gconn, err := grpc.DialContext(s3DialContext, s3gAddress, []grpc.DialOption{
-	// 	grpc.WithBlock(),
-	// 	grpc.WithTransportCredentials(insecure.NewCredentials()),
-	// }...)
+	s3addr := "localhost:9090"
+	s3cc, err := grpc.DialContext(s3DialContext, s3addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
 
-	// if err != nil {
-	// 	log.Printf("Failed to connect to %s \n", s3gAddress)
-	// }
+	if err != nil {
+		logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", frAddr, err))
+	}
 
-	// s3gc := s3_grpc_gateway.NewS3GatewayClient(s3gconn)
-	// fmt.Println(s3gc)
+	s3 := s3file.NewS3GatewayClient(s3cc)
+	logrus.Warn(s3)
+
+	// ================================ service ===============================
+
+	ss := service.NewSessionService()
+	ts := service.NewTokenService()
+
+	s := service.NewService(db, ss, ts, fr, s3)
 
 	// ================================ router ================================
 
 	router := gin.Default()
+	router.Use(middleware.Cors)
 
-	// =============================== handlers ===============================
+	// ============================== controller ==============================
 
-	// login := controller.NewLoginController(db, frc)
-	// register := controller.NewRegisterController(db, frc)
-
-	register := controller.RegisterController{
-		Db: db,
-	}
-
-	users := controller.UserController{
-		Db: db,
-	}
-
-	// =============================== services ===============================
-
-	tokenService := service.NewTokenService()
-
-	srvc := &service.Service{
-		Db:      db,
-		Session: service.NewSessionService(),
-		Facerec: nil,
-		Token:   tokenService,
-		S3:      nil,
-	}
-
-	login := controller.NewLoginController(srvc)
+	login := controller.NewLoginController(s)
+	register := controller.NewRegisterController(s)
+	users := controller.NewUserController(s)
 
 	// ================================ routes ================================
 
-	router.OPTIONS("/api/v1/login", func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "http://localhost:8080")
-		c.Header("Access-Control-Allow-Credentials", "true")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, DELETE")
-	})
-
-	router.POST("/api/v1/login", login.Post)
-	router.GET("/api/v1/register", register.Get)
-	router.GET("/api/v1/users", users.Get)
-
-	router.GET("/api/v1/debug-token", func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "http://localhost:8080")
-		c.Header("Access-Control-Allow-Credentials", "true")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, DELETE")
-
-		tok, err := tokenService.GenerateToken(&model.User{
-			Username: "username",
-			Password: "password",
-			FFVector: "3,3;4,4;5,5",
-		})
-
-		if err != nil {
-			panic(err)
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"token": tok,
-		})
-	})
-
-	router.GET("/", controller.Index)
+	router.POST("/api/v1/login", login.LoginUser)
+	router.POST("/api/v1/register", register.RegisterUser)
+	router.POST("/api/v1/users", users.ListUsers)
 
 	// =============================== shutdown ===============================
 

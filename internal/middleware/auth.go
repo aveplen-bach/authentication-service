@@ -4,26 +4,22 @@ import (
 	"net/http"
 
 	"github.com/aveplen-bach/authentication-service/internal/service"
+	"github.com/aveplen-bach/authentication-service/internal/util"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
-
-const BEARER_SCHEMA = "Bearer "
 
 func Authenticated(t *service.TokenService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-
-		tokenString := authHeader[len(BEARER_SCHEMA):]
-
-		valid, err := t.ValidateToken(tokenString)
+		token, err := util.ExtractToken(c)
 		if err != nil {
-			panic(err)
-		}
-
-		if !valid {
-			c.AbortWithStatus(http.StatusUnauthorized)
+			c.JSON(http.StatusNotFound, gin.H{
+				"err": err.Error(),
+			})
 			return
 		}
+
+		logrus.Info(token)
 
 		c.Next()
 	}

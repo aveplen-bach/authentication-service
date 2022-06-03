@@ -27,8 +27,8 @@ type header struct {
 }
 
 type payload struct {
-	ID  int `json:"id"`
-	SID int `json:"sid"`
+	UserID    int `json:"userId"`
+	SessionID int `json:"sessionId"`
 }
 
 type TokenService struct {

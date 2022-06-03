@@ -3,20 +3,21 @@ package controller
 import (
 	"net/http"
 
+	"github.com/aveplen-bach/authentication-service/internal/service"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type UserController struct {
-	Db *gorm.DB
+	service *service.Service
 }
 
-func (u *UserController) Get(c *gin.Context) {
-	c.Header("Access-Control-Allow-Origin", "http://localhost:8080")
-	c.Header("Access-Control-Allow-Credentials", "true")
-	c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-	c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, DELETE")
+func NewUserController(service *service.Service) *UserController {
+	return &UserController{
+		service: service,
+	}
+}
 
+func (u *UserController) ListUsers(c *gin.Context) {
 	var users []gin.H = []gin.H{
 		{
 			"id":       1,

@@ -1,23 +1,20 @@
 package controller
 
 import (
-	pb "github.com/aveplen-bach/authentication-service/protos/facerec"
+	"github.com/aveplen-bach/authentication-service/internal/service"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type RegisterController struct {
-	Db  *gorm.DB
-	frc pb.FaceRecognitionClient
+	service *service.Service
 }
 
-func NewRegisterController(db *gorm.DB, frc pb.FaceRecognitionClient) *RegisterController {
+func NewRegisterController(service *service.Service) *RegisterController {
 	return &RegisterController{
-		Db:  db,
-		frc: frc,
+		service: service,
 	}
 }
 
-func (l *RegisterController) Get(c *gin.Context) {
+func (l *RegisterController) RegisterUser(c *gin.Context) {
 	c.SetCookie("jwt_token", "hello, I'm jwt-token", 3600, "/", "localhost", false, true)
 }

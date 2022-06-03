@@ -13,3 +13,19 @@ type Service struct {
 	Token   *TokenService
 	S3      s3file.S3GatewayClient
 }
+
+func NewService(db *gorm.DB,
+	session *SessionService,
+	facerec pb.FaceRecognitionClient,
+	token *TokenService,
+	s3 s3file.S3GatewayClient,
+) *Service {
+
+	return &Service{
+		Db:      db,
+		Session: session,
+		Facerec: facerec,
+		Token:   token,
+		S3:      s3,
+	}
+}

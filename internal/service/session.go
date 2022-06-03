@@ -2,35 +2,30 @@ package service
 
 import (
 	"sync"
+
+	"github.com/aveplen-bach/authentication-service/internal/model"
 )
 
-type SessionEntry struct {
-	MessageAuthCode string
-	SessionKey      []byte
-	UserID          int
-	UserIDSet       bool
-}
-
 type SessionService struct {
-	store map[int]*SessionEntry
+	store map[int]*model.SessionEntry
 	cnt   int
 	mu    *sync.Mutex
 }
 
 func NewSessionService() *SessionService {
 	return &SessionService{
-		store: make(map[int]*SessionEntry),
+		store: make(map[int]*model.SessionEntry),
 		cnt:   0,
 		mu:    &sync.Mutex{},
 	}
 }
 
-func (s *SessionService) Get(sessionID int) (*SessionEntry, bool) {
+func (s *SessionService) Get(sessionID int) (*model.SessionEntry, bool) {
 	entry, ok := s.store[sessionID]
 	return entry, ok
 }
 
-func (s *SessionService) Add(entry *SessionEntry) int {
+func (s *SessionService) Add(entry *model.SessionEntry) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
