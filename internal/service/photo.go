@@ -3,16 +3,16 @@ package service
 import "fmt"
 
 type PhotoService struct {
-	fr *FacerecService
+	fs *FacerecService
 	s3 *S3Service
 }
 
 func NewPhotoService(
-	fr *FacerecService,
+	fs *FacerecService,
 	s3 *S3Service,
 ) *PhotoService {
 	return &PhotoService{
-		fr: fr,
+		fs: fs,
 		s3: s3,
 	}
 }
@@ -23,7 +23,7 @@ func (ps *PhotoService) ExtractVector(photo []byte) ([]float64, error) {
 		return nil, fmt.Errorf("could not upload photo: %w", err)
 	}
 
-	vector, err := ps.fr.ExtractVector(objectID)
+	vector, err := ps.fs.ExtractVector(objectID)
 	if err != nil {
 		return nil, fmt.Errorf("could not extract vector: %w", err)
 	}
@@ -32,7 +32,7 @@ func (ps *PhotoService) ExtractVector(photo []byte) ([]float64, error) {
 }
 
 func (ps *PhotoService) PhotoIsCloseEnough(dbVector, photoVector []float64) (bool, error) {
-	distance, err := ps.fr.GetDistance(dbVector, photoVector)
+	distance, err := ps.fs.GetDistance(dbVector, photoVector)
 	if err != nil {
 		return false, err
 	}
