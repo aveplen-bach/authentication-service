@@ -6,20 +6,17 @@ import (
 	"net/http"
 
 	"github.com/aveplen-bach/authentication-service/internal/cryptoutil"
+	"github.com/aveplen-bach/authentication-service/internal/ginutil"
 	"github.com/aveplen-bach/authentication-service/internal/service"
-	"github.com/aveplen-bach/authentication-service/internal/util"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 )
 
-func EndToEndEncryption(session *service.SessionService) gin.HandlerFunc {
+func EndToEndEncryption(ts *service.TokenService, ss *service.SessionService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// decrypt request body
 
-		logrus.Info("decrypting request body")
-
-		protToken, err := util.ExtractToken(c)
+		token, err := ginutil.ExtractToken(c)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
@@ -27,7 +24,15 @@ func EndToEndEncryption(session *service.SessionService) gin.HandlerFunc {
 			return
 		}
 
-		s, err := session.Get(uint(protToken.Payload.UserID))
+		payload, err := ts.ExtractPayload(token)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
+
+		session, err := ss.Get(uint(payload.UserID))
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"err": "you are not logged in or token is damaged",
@@ -44,7 +49,7 @@ func EndToEndEncryption(session *service.SessionService) gin.HandlerFunc {
 		}
 		defer c.Request.Body.Close()
 
-		reqBody, err := cryptoutil.DecryptAesCbc(encReqBody, s.SessionKey, s.IV)
+		reqBody, err := cryptoutil.DecryptAesCbc(encReqBody, session.SessionKey, session.IV)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
@@ -54,12 +59,8 @@ func EndToEndEncryption(session *service.SessionService) gin.HandlerFunc {
 
 		c.Request.Body = ioutil.NopCloser(bytes.NewReader(reqBody))
 
-		logrus.Info("passing decrypted body to handler")
-
 		// pass to real handler
 		c.Next()
-
-		logrus.Info("encrypting response body")
 
 		// encrypt resposne body
 		decResBody, err := ioutil.ReadAll(c.Request.Response.Body)
@@ -70,7 +71,7 @@ func EndToEndEncryption(session *service.SessionService) gin.HandlerFunc {
 			return
 		}
 
-		resBody, err := cryptoutil.EncryptAesCbc(decResBody, s.SessionKey, s.IV)
+		resBody, err := cryptoutil.EncryptAesCbc(decResBody, session.SessionKey, session.IV)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),

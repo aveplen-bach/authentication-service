@@ -1,15 +1,15 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/aveplen-bach/authentication-service/internal/ginutil"
 	"github.com/aveplen-bach/authentication-service/internal/service"
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 )
 
-func AuthCheck(as *service.AuthService) gin.HandlerFunc {
+func IncrementalToken(ts *service.TokenService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token, err := ginutil.ExtractToken(c)
 		if err != nil {
@@ -19,8 +19,16 @@ func AuthCheck(as *service.AuthService) gin.HandlerFunc {
 			return
 		}
 
-		logrus.Warn(token)
+		next, err := ts.NextToken(token)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
 
 		c.Next()
+
+		c.Header("Authorizatoin", fmt.Sprintf("Bearer %s", next))
 	}
 }

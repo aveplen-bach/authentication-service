@@ -8,25 +8,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type LoginController struct {
-	service *service.Service
-}
+func LoginUser(ls *service.LoginService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		req := &model.LoginRequest{}
+		c.BindJSON(req)
 
-func NewLoginController(service *service.Service) *LoginController {
-	return &LoginController{
-		service: service,
+		res, err := ls.Login(req)
+
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+		}
+
+		c.JSON(http.StatusOK, res)
 	}
-}
-
-func (l *LoginController) LoginUser(c *gin.Context) {
-	req := &model.LoginRequest{}
-	c.BindJSON(req)
-
-	res, err := l.service.Login(req)
-
-	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-	}
-
-	c.JSON(http.StatusOK, res)
 }
