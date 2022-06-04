@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func EndToEndEncryption(service *service.Service) gin.HandlerFunc {
+func EndToEndEncryption(session *service.SessionService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// decrypt request body
 
@@ -27,8 +27,8 @@ func EndToEndEncryption(service *service.Service) gin.HandlerFunc {
 			return
 		}
 
-		s, ok := service.Session.Get(protToken.Payload.SessionID)
-		if !ok {
+		s, err := session.Get(uint(protToken.Payload.UserID))
+		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"err": "you are not logged in or token is damaged",
 			})

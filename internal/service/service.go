@@ -9,15 +9,15 @@ import (
 type Service struct {
 	Db      *gorm.DB
 	Session *SessionService
-	Facerec pb.FaceRecognitionClient
 	Token   *TokenService
+	Facerec pb.FaceRecognitionClient
 	S3      s3file.S3GatewayClient
 }
 
 func NewService(db *gorm.DB,
 	session *SessionService,
-	facerec pb.FaceRecognitionClient,
 	token *TokenService,
+	facerec pb.FaceRecognitionClient,
 	s3 s3file.S3GatewayClient,
 ) *Service {
 

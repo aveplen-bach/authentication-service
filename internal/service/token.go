@@ -17,10 +17,10 @@ func NewTokenService() *TokenService {
 	return &TokenService{}
 }
 
-func (t *TokenService) GenerateToken(user *model.User, sessionID int) (string, error) {
+func (t *TokenService) GenerateToken(userID uint) (string, error) {
 	synchronization, _ := t.constructSynchronization()
 	header, _ := t.constructHeader()
-	payload, _ := t.constructPayload(user, sessionID)
+	payload, _ := t.constructPayload(userID)
 	signature, _ := t.constructSignature(header, payload)
 
 	return fmt.Sprintf(
@@ -63,10 +63,9 @@ func (t *TokenService) constructHeader() (string, error) {
 	return b64Head, nil
 }
 
-func (t *TokenService) constructPayload(user *model.User, sessionID int) (string, error) {
+func (t *TokenService) constructPayload(userID uint) (string, error) {
 	payload := model.Payload{
-		UserID:    int(user.ID),
-		SessionID: sessionID,
+		UserID: int(userID),
 	}
 
 	b, err := json.Marshal(payload)

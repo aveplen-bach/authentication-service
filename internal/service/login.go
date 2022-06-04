@@ -8,8 +8,7 @@ import (
 
 	"github.com/aveplen-bach/authentication-service/internal/cryptoutil"
 	"github.com/aveplen-bach/authentication-service/internal/model"
-	pb "github.com/aveplen-bach/authentication-service/protos/facerec"
-	"github.com/aveplen-bach/authentication-service/protos/s3file"
+	"github.com/aveplen-bach/authentication-service/internal/util"
 	"golang.org/x/crypto/pbkdf2"
 	"gorm.io/gorm"
 )
@@ -20,7 +19,7 @@ const (
 	STAGE_CLIENT_CRIDENTIALS
 	STAGE_SERVER_TOKEN
 
-	RandomStringLength = 16
+	LoginMACLength = 16
 )
 
 type LoginService struct {
@@ -28,8 +27,6 @@ type LoginService struct {
 	session *SessionService
 	token   *TokenService
 	ps      *PhotoService
-	facerec pb.FaceRecognitionClient
-	s3      s3file.S3GatewayClient
 }
 
 func NewLoginService(
@@ -37,17 +34,13 @@ func NewLoginService(
 	session *SessionService,
 	token *TokenService,
 	ps *PhotoService,
-	facerec pb.FaceRecognitionClient,
-	s3 s3file.S3GatewayClient,
 ) *LoginService {
 
 	return &LoginService{
 		db:      db,
 		session: session,
-		facerec: facerec,
 		token:   token,
 		ps:      ps,
-		s3:      s3,
 	}
 }
 
@@ -66,40 +59,58 @@ func (s *LoginService) Login(req *model.LoginRequest) (*model.LoginResponse, err
 
 // client conn init stage
 
-func (ls *LoginService) handleConnectionInit(loginRequest *model.LoginRequest) (*model.LoginResponse, error) {
-	mac, err := cryptoutil.GenerateRandomString(RandomStringLength)
+func (ls *LoginService) handleConnectionInit(lreq *model.LoginRequest) (*model.LoginResponse, error) {
+	// get user from db
+	var user model.User
+
+	result := ls.db.Where("username = ?", lreq.Username).First(&user)
+	if result.Error != nil {
+		return nil, fmt.Errorf("could not fetch user from db: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return nil, fmt.Errorf("user with given username not found in db")
+	}
+
+	lmac, err := cryptoutil.GenerateRandomString(LoginMACLength)
 	if err != nil {
 		return nil, err
 	}
 
-	sessionID := ls.session.Add(&model.SessionEntry{
-		MessageAuthCode: mac,
-	})
+	session, err := ls.session.New(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("could not initialize session: %w", err)
+	}
+	session.LoginMAC = lmac
 
 	return &model.LoginResponse{
-		SessionID: sessionID,
-		MAC:       mac,
-		Stage:     STAGE_SERVER_GEN_MAC,
+		Stage:    STAGE_SERVER_GEN_MAC,
+		UserID:   int(user.ID),
+		LoginMAC: lmac,
 	}, nil
 }
 
 // client cridentials stage
 
-func (ls *LoginService) handleCredentials(request *model.LoginRequest) (*model.LoginResponse, error) {
+func (ls *LoginService) handleCredentials(lreq *model.LoginRequest) (*model.LoginResponse, error) {
 	// fetch user from db
 	var user model.User
-	if result := ls.db.Where("username = ?", request.Username).First(&user); result.Error != nil {
-		return nil, result.Error
+
+	result := ls.db.Where("username = ?", lreq.Username).First(&user)
+	if result.Error != nil {
+		return nil, fmt.Errorf("could not fetch user from db: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return nil, fmt.Errorf("user with given username not found in db")
 	}
 
 	// get users session
-	session, ok := ls.session.Get(request.SessionID)
-	if !ok {
-		return nil, errors.New("session does not exist")
+	session, err := ls.session.Get(uint(lreq.UserID))
+	if err != nil {
+		return nil, fmt.Errorf("could not get user session: %w", err)
 	}
 
 	// derive session key
-	skey, err := deriveSessionKey([]byte(user.Password), session.MessageAuthCode)
+	skey, err := deriveSessionKey([]byte(user.Password), session.LoginMAC)
 	if err != nil {
 		return nil, err
 	}
@@ -108,38 +119,43 @@ func (ls *LoginService) handleCredentials(request *model.LoginRequest) (*model.L
 	session.SessionKey = skey
 
 	// decrypt photo
-	encPhoto, err := base64.StdEncoding.DecodeString(request.EncryptedPhoto)
+	photoCipher, err := base64.StdEncoding.DecodeString(lreq.EncryptedPhoto)
 	if err != nil {
 		return nil, err
 	}
 
-	ivDecoded, err := base64.StdEncoding.DecodeString(request.IV)
+	iv, err := base64.StdEncoding.DecodeString(lreq.IV)
 	if err != nil {
 		return nil, err
 	}
 
-	photo, err := cryptoutil.DecryptAesCbc(encPhoto, skey, ivDecoded)
+	photo, err := cryptoutil.DecryptAesCbc(photoCipher, skey, iv)
 	if err != nil {
 		return nil, fmt.Errorf("could not decrypt photo: %w", err)
 	}
 
 	// check photo
-	photoIsClose, err := ls.ps.PhotoIsCloseEnough(DeserializeFloats64(user.FFVector), photo)
+	photoVector, err := ls.ps.ExtractVector(photo)
+	if err != nil {
+		return nil, fmt.Errorf("could not extract vector: %w", err)
+	}
+	photoIsCloseEnough, err := ls.ps.PhotoIsCloseEnough(util.DeserializeFloats64(user.FFVector), photoVector)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get distance between photots: %w", err)
 	}
-	if !photoIsClose {
+	if !photoIsCloseEnough {
 		return nil, fmt.Errorf("photo is not close enough")
 	}
 
-	token, err := ls.token.GenerateToken(&user, request.SessionID)
+	// generate token
+	token, err := ls.token.GenerateToken(user.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	return &model.LoginResponse{
 		Stage: STAGE_SERVER_TOKEN,
-		JWT:   token,
+		Token: token,
 	}, nil
 }
 

@@ -1,83 +1,44 @@
 package service
 
 import (
-	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 
 	"github.com/aveplen-bach/authentication-service/internal/model"
+	"github.com/aveplen-bach/authentication-service/internal/util"
+	"gorm.io/gorm"
 )
 
-// TODO: переделать сессии на доступ по userID
-func (s *Service) Register(userID uint, request *model.RegisterRequest) error {
-	session, ok := s.Session.Get(int(userID))
-	if !ok {
-		return fmt.Errorf("session not initialized for %d", userID)
+type RegisterService struct {
+	db *gorm.DB
+	ps *PhotoService
+}
+
+func NewRegisterService(db *gorm.DB, ps *PhotoService) *RegisterService {
+	return &RegisterService{
+		db: db,
+		ps: ps,
+	}
+}
+
+func (rs *RegisterService) Register(rreq *model.RegisterRequest) error {
+	photoBytes, err := base64.StdEncoding.DecodeString(rreq.Photo)
+	if err != nil {
+		return fmt.Errorf("cannot decode photo: %w", err)
 	}
 
-	reqPayload, err := s.decryptRegisterPayload(session.SessionKey, request.EncryptedPayload)
+	vecotr, err := rs.ps.ExtractVector(photoBytes)
 	if err != nil {
-		return err
-	}
-
-	photo, err := base64.StdEncoding.DecodeString(reqPayload.Photo)
-	if err != nil {
-		return err
-	}
-
-	objectID, err := s.upload(photo)
-	if err != nil {
-		return err
-	}
-
-	f64Vecotr, err := s.extractVector(objectID)
-	if err != nil {
-		return err
+		return fmt.Errorf("cannot extract ff vector: %w", err)
 	}
 
 	user := model.User{
-		Username: reqPayload.Username,
-		Password: reqPayload.Password,
-		FFVector: SerializeFloats64(f64Vecotr),
+		Username: rreq.Username,
+		Password: rreq.Password,
+		FFVector: util.SerializeFloats64(vecotr),
 	}
 
-	result := s.Db.Save(&user)
+	result := rs.db.Save(&user)
 
 	return result.Error
-}
-
-func (s *Service) decryptRegisterPayload(key []byte, encryptedPayload string) (*model.RegisterRequestPayload, error) {
-	encPayloadBytes, err := base64.StdEncoding.DecodeString(encryptedPayload)
-	if err != nil {
-		return nil, err
-	}
-
-	cipherText := new(bytes.Buffer)
-	cipherText.Write(encPayloadBytes)
-
-	c, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-
-	iv := encPayloadBytes[c.BlockSize():]
-
-	cbc := cipher.NewCBCDecrypter(c, iv)
-	plainText := make([]byte, len(cipherText.Bytes()))
-	cbc.CryptBlocks(plainText, cipherText.Bytes())
-
-	unpadded, err := pkcs7Unpad(plainText, aes.BlockSize)
-	if err != nil {
-		return nil, err
-	}
-
-	var reqPayload model.RegisterRequestPayload
-	if err := json.Unmarshal(unpadded, &reqPayload); err != nil {
-		return nil, err
-	}
-
-	return &reqPayload, nil
 }
