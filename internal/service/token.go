@@ -78,6 +78,56 @@ func (t *TokenService) NextToken(token string) (string, error) {
 	return repacked, nil
 }
 
+func (t *TokenService) NextSyn(userID uint, protected []byte) ([]byte, error) {
+	s, err := t.ss.Get(userID)
+	if err != nil {
+		return nil, fmt.Errorf("could not get session: %w", err)
+	}
+
+	raw, err := cryptoutil.DecryptAesCbc(protected, s.SessionKey, s.IV)
+	if err != nil {
+		return nil, fmt.Errorf("could not decrypt syn: %w", err)
+	}
+
+	var syn model.Synchronization
+	if err := json.Unmarshal(raw, &syn); err != nil {
+		return nil, fmt.Errorf("could not unmarshal syn: %w", err)
+	}
+
+	syn.Syn += syn.Inc
+
+	updatedRaw, err := json.Marshal(syn)
+	if err != nil {
+		return nil, fmt.Errorf("could not marshal syn: %w", err)
+	}
+
+	updatedProtected, err := cryptoutil.EncryptAesCbc(updatedRaw, s.SessionKey, s.IV)
+	if err != nil {
+		return nil, fmt.Errorf("could not encrypt syn: %w", err)
+	}
+
+	return updatedProtected, nil
+}
+
+// func Sign(msg, key []byte) string {
+// 	mac := hmac.New(sha256.New, key)
+// 	mac.Write(msg)
+
+// 	return hex.EncodeToString(mac.Sum(nil))
+// }
+
+// func Verify(msg, key []byte, hash string) (bool, error) {
+// 	sig, err := hex.DecodeString(hash)
+// 	if err != nil {
+// 		return false, err
+// 	}
+
+// 	mac := hmac.New(sha256.New, key)
+// 	mac.Write(msg)
+
+// 	return hmac.Equal(sig, mac.Sum(nil)), nil
+// }
+
 func (t *TokenService) ValidateToken(token string) (bool, error) {
 	protected, err := unpack(token)
 	if err != nil {

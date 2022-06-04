@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,6 +19,8 @@ import (
 	"github.com/aveplen-bach/authentication-service/internal/middleware"
 	"github.com/aveplen-bach/authentication-service/internal/model"
 	"github.com/aveplen-bach/authentication-service/internal/service"
+	"github.com/aveplen-bach/authentication-service/internal/transport"
+	"github.com/aveplen-bach/authentication-service/protos/auth"
 	"github.com/aveplen-bach/authentication-service/protos/facerec"
 	"github.com/aveplen-bach/authentication-service/protos/s3file"
 	"github.com/gin-gonic/gin"
@@ -105,26 +108,63 @@ func main() {
 	s3s := service.NewS3Service(s3)
 	fs := service.NewFacerecService(fr)
 	ps := service.NewPhotoService(fs, s3s)
-	// as := service.NewAuthService(ts)
+	as := service.NewAuthService(ts)
 	ls := service.NewLoginService(us, ss, ts, ps)
 	rs := service.NewRegisterService(us, ps)
+	s := service.NewService(ts)
+
+	// ============================= grpc server ==============================
+
+	lis, err := net.Listen("tcp", "localhost:30031")
+	if err != nil {
+		logrus.Fatalf("failed to listen: %v", err)
+	}
+	var opts []grpc.ServerOption
+	grpcServer := grpc.NewServer(opts...)
+	auth.RegisterAuthenticationServer(grpcServer, transport.NewAuthenticationServer(s))
 
 	// ================================ router ================================
 
 	r := gin.Default()
 	r.Use(middleware.Cors())
-	// router.Use(middleware.IncrementalToken(ts))
-	// router.Use(middleware.AuthCheck(as))
-	// router.Use(middleware.EndToEndEncryption(ts, ss))
+
+	protected := r.Group("/api/protected")
+	protected.Use(middleware.AuthCheck(as))
+	protected.Use(middleware.IncrementalToken(ts))
+	protected.Use(middleware.EndToEndEncryption(ts, ss))
+
+	open := r.Group("/api/open")
 
 	// ================================ routes ================================
 
-	r.POST("/api/login", controller.LoginUser(ls))
-	r.POST("/api/register", controller.RegisterUser(rs))
+	protected.POST("/register", controller.RegisterUser(rs))
+	protected.GET("/users", controller.ListUsers(us))
+	protected.POST("/incremental", func(c *gin.Context) {
+		token, err := ginutil.ExtractToken(c)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
 
-	r.GET("/api/user", controller.ListUsers(us))
+		next, err := ts.NextToken(token)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
 
-	r.POST("/api/hello", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "successfully created token",
+			"token":  next,
+			"lexa,":  "this shit really works, i'm blown!",
+		})
+	})
+
+	open.POST("/api/login", controller.LoginUser(ls))
+	open.POST("/hello", func(c *gin.Context) {
 		var req HelloRequest
 		if err := c.BindJSON(&req); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -160,35 +200,16 @@ func main() {
 		})
 	})
 
-	r.POST("/api/hello/incremental", func(c *gin.Context) {
-		token, err := ginutil.ExtractToken(c)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
-				"err": err.Error(),
-			})
-			return
-		}
-
-		next, err := ts.NextToken(token)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
-				"err": err.Error(),
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"status": "successfully created token",
-			"token":  next,
-		})
-	})
-
 	// =============================== shutdown ===============================
 
 	srv := &http.Server{
 		Addr:    ":8081",
 		Handler: r,
 	}
+
+	go func() {
+		grpcServer.Serve(lis)
+	}()
 
 	go func() {
 		logrus.Infof("listening: %s\n", srv.Addr)
@@ -204,6 +225,8 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	grpcServer.Stop()
 
 	if err := srv.Shutdown(ctx); err != nil {
 		logrus.Fatal("Server forced to shutdown:", err)
