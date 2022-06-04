@@ -6,17 +6,16 @@ import (
 
 	"github.com/aveplen-bach/authentication-service/internal/model"
 	"github.com/aveplen-bach/authentication-service/internal/util"
-	"gorm.io/gorm"
 )
 
 type RegisterService struct {
-	db *gorm.DB
+	us *UserService
 	ps *PhotoService
 }
 
-func NewRegisterService(db *gorm.DB, ps *PhotoService) *RegisterService {
+func NewRegisterService(us *UserService, ps *PhotoService) *RegisterService {
 	return &RegisterService{
-		db: db,
+		us: us,
 		ps: ps,
 	}
 }
@@ -32,13 +31,15 @@ func (rs *RegisterService) Register(rreq *model.RegisterRequest) error {
 		return fmt.Errorf("cannot extract ff vector: %w", err)
 	}
 
-	user := model.User{
+	user := &model.User{
 		Username: rreq.Username,
 		Password: rreq.Password,
 		FFVector: util.SerializeFloats64(vecotr),
 	}
 
-	result := rs.db.Save(&user)
+	if err := rs.us.NewUser(user); err != nil {
+		return fmt.Errorf("could not register user: %w", err)
+	}
 
-	return result.Error
+	return nil
 }
