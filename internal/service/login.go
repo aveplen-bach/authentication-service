@@ -10,7 +10,6 @@ import (
 	"github.com/aveplen-bach/authentication-service/internal/model"
 	"github.com/aveplen-bach/authentication-service/internal/util"
 	"golang.org/x/crypto/pbkdf2"
-	"gorm.io/gorm"
 )
 
 const (
@@ -23,21 +22,21 @@ const (
 )
 
 type LoginService struct {
-	db      *gorm.DB
+	us      *UserService
 	session *SessionService
 	token   *TokenService
 	ps      *PhotoService
 }
 
 func NewLoginService(
-	db *gorm.DB,
+	us *UserService,
 	session *SessionService,
 	token *TokenService,
 	ps *PhotoService,
 ) *LoginService {
 
 	return &LoginService{
-		db:      db,
+		us:      us,
 		session: session,
 		token:   token,
 		ps:      ps,
@@ -60,15 +59,9 @@ func (s *LoginService) Login(req *model.LoginRequest) (*model.LoginResponse, err
 // client conn init stage
 
 func (ls *LoginService) handleConnectionInit(lreq *model.LoginRequest) (*model.LoginResponse, error) {
-	// get user from db
-	var user model.User
-
-	result := ls.db.Where("username = ?", lreq.Username).First(&user)
-	if result.Error != nil {
-		return nil, fmt.Errorf("could not fetch user from db: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return nil, fmt.Errorf("user with given username not found in db")
+	user, err := ls.us.GetUserByUsername(lreq.Username)
+	if err != nil {
+		return nil, fmt.Errorf("could not find user with given username: %w", err)
 	}
 
 	lmac, err := cryptoutil.GenerateRandomString(LoginMACLength)
@@ -92,15 +85,9 @@ func (ls *LoginService) handleConnectionInit(lreq *model.LoginRequest) (*model.L
 // client cridentials stage
 
 func (ls *LoginService) handleCredentials(lreq *model.LoginRequest) (*model.LoginResponse, error) {
-	// fetch user from db
-	var user model.User
-
-	result := ls.db.Where("username = ?", lreq.Username).First(&user)
-	if result.Error != nil {
-		return nil, fmt.Errorf("could not fetch user from db: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return nil, fmt.Errorf("user with given username not found in db")
+	user, err := ls.us.GetUserByUsername(lreq.Username)
+	if err != nil {
+		return nil, fmt.Errorf("could not find user with given username: %w", err)
 	}
 
 	// get users session
@@ -139,10 +126,12 @@ func (ls *LoginService) handleCredentials(lreq *model.LoginRequest) (*model.Logi
 	if err != nil {
 		return nil, fmt.Errorf("could not extract vector: %w", err)
 	}
+
 	photoIsCloseEnough, err := ls.ps.PhotoIsCloseEnough(util.DeserializeFloats64(user.FFVector), photoVector)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get distance between photots: %w", err)
 	}
+
 	if !photoIsCloseEnough {
 		return nil, fmt.Errorf("photo is not close enough")
 	}
