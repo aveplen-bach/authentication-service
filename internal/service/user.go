@@ -17,6 +17,17 @@ func NewUserService(db *gorm.DB) *UserService {
 	}
 }
 
+func (us *UserService) GetAllUsers() ([]model.User, error) {
+	var users []model.User
+	result := us.db.Find(&users)
+
+	if result.Error != nil {
+		return nil, fmt.Errorf("could not fetch users from db: %w", result.Error)
+	}
+
+	return users, nil
+}
+
 func (us *UserService) GetUserByUsername(username string) (*model.User, error) {
 	user := &model.User{}
 
