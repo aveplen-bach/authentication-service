@@ -159,7 +159,6 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "successfully created token",
 			"token":  next,
-			"lexa,":  "this shit really works, i'm blown!",
 		})
 	})
 

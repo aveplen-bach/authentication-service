@@ -49,7 +49,7 @@ func addPadding(plaintext []byte, blockSize int) ([]byte, error) {
 		return nil, fmt.Errorf("invalid block size")
 	}
 	if len(plaintext) == 0 {
-		return nil, fmt.Errorf("invalid data")
+		return []byte{}, nil
 	}
 
 	padding := byte(blockSize - len(plaintext)%blockSize)
@@ -69,7 +69,7 @@ func removePadding(ciphertext []byte, blockSize int) ([]byte, error) {
 		return nil, fmt.Errorf("invalid block size")
 	}
 	if len(ciphertext) == 0 {
-		return nil, fmt.Errorf("invalid data")
+		return []byte{}, nil
 	}
 	if len(ciphertext)%blockSize != 0 {
 		return nil, fmt.Errorf("invalid data")

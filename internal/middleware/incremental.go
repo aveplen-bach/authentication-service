@@ -26,7 +26,7 @@ func IncrementalToken(ts *service.TokenService) gin.HandlerFunc {
 
 		next, err := ts.NextToken(token)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return

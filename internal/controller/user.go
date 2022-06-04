@@ -12,7 +12,7 @@ func ListUsers(us *service.UserService) gin.HandlerFunc {
 
 		users, err := us.GetAllUsers()
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return

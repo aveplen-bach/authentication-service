@@ -15,7 +15,7 @@ func AuthCheck(as *service.AuthService) gin.HandlerFunc {
 
 		token, err := ginutil.ExtractToken(c)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return

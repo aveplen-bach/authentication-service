@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"encoding/base64"
 	"io/ioutil"
 	"net/http"
 
@@ -45,14 +46,22 @@ func EndToEndEncryption(ts *service.TokenService, ss *service.SessionService) gi
 			return
 		}
 
-		encReqBody, err := ioutil.ReadAll(c.Request.Body)
+		b64EncReqBody, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return
 		}
 		defer c.Request.Body.Close()
+
+		encReqBody, err := base64.StdEncoding.DecodeString(string(b64EncReqBody))
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
 
 		reqBody, err := cryptoutil.DecryptAesCbc(encReqBody, session.SessionKey, session.IV)
 		if err != nil {
@@ -64,11 +73,14 @@ func EndToEndEncryption(ts *service.TokenService, ss *service.SessionService) gi
 
 		c.Request.Body = ioutil.NopCloser(bytes.NewReader(reqBody))
 
+		bw := &bodyWriter{body: new(bytes.Buffer), ResponseWriter: c.Writer}
+		c.Writer = bw
+
 		// pass to real handler
 		c.Next()
 
 		// encrypt resposne body
-		decResBody, err := ioutil.ReadAll(c.Request.Response.Body)
+		decResBody, err := ioutil.ReadAll(bw.body)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
@@ -84,6 +96,18 @@ func EndToEndEncryption(ts *service.TokenService, ss *service.SessionService) gi
 			return
 		}
 
-		c.Request.Response.Body = ioutil.NopCloser(bytes.NewReader(resBody))
+		b64ResBody := []byte(base64.StdEncoding.EncodeToString(resBody))
+
+		c.Writer = bw.ResponseWriter
+		c.Writer.Write(b64ResBody)
 	}
+}
+
+type bodyWriter struct {
+	gin.ResponseWriter
+	body *bytes.Buffer
+}
+
+func (w bodyWriter) Write(b []byte) (int, error) {
+	return w.body.Write(b)
 }
