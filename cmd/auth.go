@@ -87,7 +87,7 @@ func main() {
 		s3ch <- s3file.NewS3GatewayClient(s3cc)
 	}()
 
-	// ============================== client coll =============================
+	// ============================== client wait =============================
 
 	fr := <-frch
 	s3 := <-s3ch
@@ -111,20 +111,20 @@ func main() {
 
 	// ================================ router ================================
 
-	router := gin.Default()
-	router.Use(middleware.Cors())
+	r := gin.Default()
+	r.Use(middleware.Cors())
 	// router.Use(middleware.IncrementalToken(ts))
 	// router.Use(middleware.AuthCheck(as))
 	// router.Use(middleware.EndToEndEncryption(ts, ss))
 
 	// ================================ routes ================================
 
-	router.POST("/api/login", controller.LoginUser(ls))
-	router.POST("/api/register", controller.RegisterUser(rs))
+	r.POST("/api/login", controller.LoginUser(ls))
+	r.POST("/api/register", controller.RegisterUser(rs))
 
-	router.GET("/api/user", controller.ListUsers(us))
+	r.GET("/api/user", controller.ListUsers(us))
 
-	router.POST("/api/hello", func(c *gin.Context) {
+	r.POST("/api/hello", func(c *gin.Context) {
 		var req HelloRequest
 		if err := c.BindJSON(&req); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -160,7 +160,7 @@ func main() {
 		})
 	})
 
-	router.POST("/api/hello/incremental", func(c *gin.Context) {
+	r.POST("/api/hello/incremental", func(c *gin.Context) {
 		token, err := ginutil.ExtractToken(c)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -187,7 +187,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:    ":8081",
-		Handler: router,
+		Handler: r,
 	}
 
 	go func() {
