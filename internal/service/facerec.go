@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/aveplen-bach/authentication-service/protos/facerec"
-	face_recognition_service "github.com/aveplen-bach/authentication-service/protos/facerec"
 )
 
 type FacerecService struct {
@@ -19,7 +18,7 @@ func NewFacerecService(fr facerec.FaceRecognitionClient) *FacerecService {
 }
 
 func (fs *FacerecService) ExtractVector(objectID uint64) ([]float64, error) {
-	res, err := fs.fr.ExtractFFVectorV1(context.Background(), &face_recognition_service.ExtractFFVectorV1Request{
+	res, err := fs.fr.ExtractFFVectorV1(context.Background(), &facerec.ExtractFFVectorV1Request{
 		Id: objectID,
 	})
 
