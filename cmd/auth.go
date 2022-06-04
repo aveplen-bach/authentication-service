@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/aveplen-bach/authentication-service/internal/controller"
+	"github.com/aveplen-bach/authentication-service/internal/ginutil"
 	"github.com/aveplen-bach/authentication-service/internal/middleware"
 	"github.com/aveplen-bach/authentication-service/internal/model"
 	"github.com/aveplen-bach/authentication-service/internal/service"
@@ -19,11 +22,16 @@ import (
 	"github.com/aveplen-bach/authentication-service/protos/s3file"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/crypto/pbkdf2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+type HelloRequest struct {
+	UserID int `json:"userId"`
+}
 
 func main() {
 	// =============================== database ===============================
@@ -93,13 +101,11 @@ func main() {
 
 	us := service.NewUserService(db)
 	ss := service.NewSessionService()
-	ts := service.NewTokenService()
+	ts := service.NewTokenService(ss)
 	s3s := service.NewS3Service(s3)
 	fs := service.NewFacerecService(fr)
-
 	ps := service.NewPhotoService(fs, s3s)
-
-	as := service.NewAuthService(ts)
+	// as := service.NewAuthService(ts)
 	ls := service.NewLoginService(us, ss, ts, ps)
 	rs := service.NewRegisterService(us, ps)
 
@@ -107,9 +113,9 @@ func main() {
 
 	router := gin.Default()
 	router.Use(middleware.Cors())
-	router.Use(middleware.IncrementalToken(ts))
-	router.Use(middleware.AuthCheck(as))
-	router.Use(middleware.EndToEndEncryption(ts, ss))
+	// router.Use(middleware.IncrementalToken(ts))
+	// router.Use(middleware.AuthCheck(as))
+	// router.Use(middleware.EndToEndEncryption(ts, ss))
 
 	// ================================ routes ================================
 
@@ -117,6 +123,65 @@ func main() {
 	router.POST("/api/register", controller.RegisterUser(rs))
 
 	router.GET("/api/user", controller.ListUsers(us))
+
+	router.POST("/api/hello", func(c *gin.Context) {
+		var req HelloRequest
+		if err := c.BindJSON(&req); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
+
+		session, err := ss.New(uint(req.UserID))
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
+
+		session.SessionKey = pbkdf2.Key([]byte("password"), []byte("salt"), 4096, 16, sha1.New)
+		session.IV = make([]byte, 16)
+
+		token, err := ts.GenerateToken(uint(req.UserID))
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status": "successfully created token",
+			"token":  token,
+			"key":    base64.StdEncoding.EncodeToString(session.SessionKey),
+			"iv":     base64.StdEncoding.EncodeToString(session.IV),
+		})
+	})
+
+	router.POST("/api/hello/incremental", func(c *gin.Context) {
+		token, err := ginutil.ExtractToken(c)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
+
+		next, err := ts.NextToken(token)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status": "successfully created token",
+			"token":  next,
+		})
+	})
 
 	// =============================== shutdown ===============================
 
