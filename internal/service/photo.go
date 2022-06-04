@@ -9,18 +9,33 @@ import (
 	"github.com/aveplen-bach/authentication-service/protos/s3file"
 )
 
-func (s *Service) CheckPhoto(vector []float64, photo []byte) (bool, error) {
-	objectID, err := s.upload(photo)
+type PhotoService struct {
+	s3 s3file.S3GatewayClient
+	fr face_recognition_service.FaceRecognitionClient
+}
+
+func NewPhotoService(
+	s3 s3file.S3GatewayClient,
+	fr face_recognition_service.FaceRecognitionClient,
+) *PhotoService {
+	return &PhotoService{
+		s3: s3,
+		fr: fr,
+	}
+}
+
+func (ps *PhotoService) PhotoIsCloseEnough(vector []float64, photo []byte) (bool, error) {
+	objectID, err := ps.upload(photo)
 	if err != nil {
 		return false, err
 	}
 
-	derivedVector, err := s.extractVector(objectID)
+	derivedVector, err := ps.extractVector(objectID)
 	if err != nil {
 		return false, err
 	}
 
-	distance, err := s.distance(vector, derivedVector)
+	distance, err := ps.getDistance(vector, derivedVector)
 	if err != nil {
 		return false, err
 	}
@@ -28,10 +43,10 @@ func (s *Service) CheckPhoto(vector []float64, photo []byte) (bool, error) {
 	return distance < 0.6, nil
 }
 
-func (s *Service) upload(photo []byte) (uint64, error) {
+func (ps *PhotoService) upload(photo []byte) (uint64, error) {
 	id := uint64(time.Now().Unix())
 
-	if _, err := s.S3.PutImageObject(context.Background(), &s3file.ImageObject{
+	if _, err := ps.s3.PutImageObject(context.Background(), &s3file.ImageObject{
 		Id:       id,
 		Contents: photo,
 	}); err != nil {
@@ -41,8 +56,8 @@ func (s *Service) upload(photo []byte) (uint64, error) {
 	return id, nil
 }
 
-func (s *Service) extractVector(objectID uint64) ([]float64, error) {
-	res, err := s.Facerec.ExtractFFVectorV1(context.Background(), &face_recognition_service.ExtractFFVectorV1Request{
+func (ps *PhotoService) extractVector(objectID uint64) ([]float64, error) {
+	res, err := ps.fr.ExtractFFVectorV1(context.Background(), &face_recognition_service.ExtractFFVectorV1Request{
 		Id: objectID,
 	})
 
@@ -53,7 +68,7 @@ func (s *Service) extractVector(objectID uint64) ([]float64, error) {
 	return res.Ffvc, nil
 }
 
-func (s *Service) distance(x, y []float64) (float64, error) {
+func (ps *PhotoService) getDistance(x, y []float64) (float64, error) {
 	if len(x) != len(y) {
 		return 0., fmt.Errorf("different lengths")
 	}

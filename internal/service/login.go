@@ -1,16 +1,17 @@
 package service
 
 import (
-	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
+	"fmt"
 
+	"github.com/aveplen-bach/authentication-service/internal/cryptoutil"
 	"github.com/aveplen-bach/authentication-service/internal/model"
+	pb "github.com/aveplen-bach/authentication-service/protos/facerec"
+	"github.com/aveplen-bach/authentication-service/protos/s3file"
 	"golang.org/x/crypto/pbkdf2"
+	"gorm.io/gorm"
 )
 
 const (
@@ -18,9 +19,39 @@ const (
 	STAGE_SERVER_GEN_MAC
 	STAGE_CLIENT_CRIDENTIALS
 	STAGE_SERVER_TOKEN
+
+	RandomStringLength = 16
 )
 
-func (s *Service) Login(req *model.LoginRequest) (*model.LoginResponse, error) {
+type LoginService struct {
+	db      *gorm.DB
+	session *SessionService
+	token   *TokenService
+	ps      *PhotoService
+	facerec pb.FaceRecognitionClient
+	s3      s3file.S3GatewayClient
+}
+
+func NewLoginService(
+	db *gorm.DB,
+	session *SessionService,
+	token *TokenService,
+	ps *PhotoService,
+	facerec pb.FaceRecognitionClient,
+	s3 s3file.S3GatewayClient,
+) *LoginService {
+
+	return &LoginService{
+		db:      db,
+		session: session,
+		facerec: facerec,
+		token:   token,
+		ps:      ps,
+		s3:      s3,
+	}
+}
+
+func (s *LoginService) Login(req *model.LoginRequest) (*model.LoginResponse, error) {
 	switch req.Stage {
 	case STAGE_CLIENT_CONN_INIT:
 		return s.handleConnectionInit(req)
@@ -35,13 +66,13 @@ func (s *Service) Login(req *model.LoginRequest) (*model.LoginResponse, error) {
 
 // client conn init stage
 
-func (s *Service) handleConnectionInit(loginRequest *model.LoginRequest) (*model.LoginResponse, error) {
-	mac, err := s.generateSessionMAC(loginRequest)
+func (ls *LoginService) handleConnectionInit(loginRequest *model.LoginRequest) (*model.LoginResponse, error) {
+	mac, err := cryptoutil.GenerateRandomString(RandomStringLength)
 	if err != nil {
 		return nil, err
 	}
 
-	sessionID := s.Session.Add(&SessionEntry{
+	sessionID := ls.session.Add(&model.SessionEntry{
 		MessageAuthCode: mac,
 	})
 
@@ -52,50 +83,56 @@ func (s *Service) handleConnectionInit(loginRequest *model.LoginRequest) (*model
 	}, nil
 }
 
-func (s *Service) generateSessionMAC(_ *model.LoginRequest) (string, error) {
-	randomBytes := make([]byte, 16)
-	if _, err := rand.Read(randomBytes); err != nil {
-		return "", nil
-	}
-
-	return base64.StdEncoding.EncodeToString(randomBytes), nil
-}
-
 // client cridentials stage
 
-func (s *Service) handleCredentials(request *model.LoginRequest) (*model.LoginResponse, error) {
+func (ls *LoginService) handleCredentials(request *model.LoginRequest) (*model.LoginResponse, error) {
+	// fetch user from db
 	var user model.User
-	if result := s.Db.Where("username = ?", request.Username).First(&user); result.Error != nil {
+	if result := ls.db.Where("username = ?", request.Username).First(&user); result.Error != nil {
 		return nil, result.Error
 	}
 
-	session, ok := s.Session.Get(request.SessionID)
+	// get users session
+	session, ok := ls.session.Get(request.SessionID)
 	if !ok {
 		return nil, errors.New("session does not exist")
 	}
 
-	skey, err := s.deriveSessionKey([]byte(user.Password), session.MessageAuthCode)
+	// derive session key
+	skey, err := deriveSessionKey([]byte(user.Password), session.MessageAuthCode)
 	if err != nil {
 		return nil, err
 	}
 
+	// save session key
 	session.SessionKey = skey
 
-	photo, err := s.decryptPhoto(skey, request.EncryptedPhoto, request.IV)
+	// decrypt photo
+	encPhoto, err := base64.StdEncoding.DecodeString(request.EncryptedPhoto)
 	if err != nil {
 		return nil, err
 	}
 
-	if photoOk, err := s.CheckPhoto(DeserializeFloats64(user.FFVector), photo); !photoOk || err != nil {
-		if err != nil {
-			return nil, err
-		}
-		if !photoOk {
-			return nil, errors.New("photo is not ok")
-		}
+	ivDecoded, err := base64.StdEncoding.DecodeString(request.IV)
+	if err != nil {
+		return nil, err
 	}
 
-	token, err := s.Token.GenerateToken(&user)
+	photo, err := cryptoutil.DecryptAesCbc(encPhoto, skey, ivDecoded)
+	if err != nil {
+		return nil, fmt.Errorf("could not decrypt photo: %w", err)
+	}
+
+	// check photo
+	photoIsClose, err := ls.ps.PhotoIsCloseEnough(DeserializeFloats64(user.FFVector), photo)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get distance between photots: %w", err)
+	}
+	if !photoIsClose {
+		return nil, fmt.Errorf("photo is not close enough")
+	}
+
+	token, err := ls.token.GenerateToken(&user, request.SessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +143,7 @@ func (s *Service) handleCredentials(request *model.LoginRequest) (*model.LoginRe
 	}, nil
 }
 
-func (s *Service) deriveSessionKey(password []byte, sessionMAC string) ([]byte, error) {
+func deriveSessionKey(password []byte, sessionMAC string) ([]byte, error) {
 	sessionMACBytes, err := base64.StdEncoding.DecodeString(sessionMAC)
 	if err != nil {
 		return nil, err
@@ -115,58 +152,4 @@ func (s *Service) deriveSessionKey(password []byte, sessionMAC string) ([]byte, 
 	key := pbkdf2.Key(password, sessionMACBytes, 4096, 16, sha1.New)
 
 	return key, nil
-}
-
-func (s *Service) decryptPhoto(key []byte, encryptedPhoto, iv string) ([]byte, error) {
-	encPhoto, err := base64.StdEncoding.DecodeString(encryptedPhoto)
-	if err != nil {
-		return nil, err
-	}
-
-	ivDecoded, err := base64.StdEncoding.DecodeString(iv)
-	if err != nil {
-		return nil, err
-	}
-
-	cipherText := new(bytes.Buffer)
-	cipherText.Write(encPhoto)
-
-	c, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-
-	cbc := cipher.NewCBCDecrypter(c, ivDecoded)
-	plainText := make([]byte, len(cipherText.Bytes()))
-	cbc.CryptBlocks(plainText, cipherText.Bytes())
-
-	unpadded, err := pkcs7Unpad(plainText, aes.BlockSize)
-	if err != nil {
-		return nil, err
-	}
-
-	return unpadded, nil
-}
-
-func pkcs7Unpad(b []byte, blocksize int) ([]byte, error) {
-	if blocksize <= 0 {
-		return nil, errors.New("ErrInvalidBlockSize")
-	}
-	if len(b) == 0 {
-		return nil, errors.New("ErrInvalidPKCS7Data")
-	}
-	if len(b)%blocksize != 0 {
-		return nil, errors.New("ErrInvalidPKCS7Padding")
-	}
-	c := b[len(b)-1]
-	n := int(c)
-	if n == 0 || n > len(b) {
-		return nil, errors.New("ErrInvalidPKCS7Padding")
-	}
-	for i := 0; i < n; i++ {
-		if b[len(b)-n+i] != c {
-			return nil, errors.New("ErrInvalidPKCS7Padding")
-		}
-	}
-	return b[:len(b)-n], nil
 }
