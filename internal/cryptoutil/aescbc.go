@@ -52,7 +52,7 @@ func addPadding(plaintext []byte, blockSize int) ([]byte, error) {
 		return nil, fmt.Errorf("invalid data")
 	}
 
-	padding := byte(len(plaintext) - len(plaintext)%blockSize)
+	padding := byte(blockSize - len(plaintext)%blockSize)
 
 	out := make([]byte, len(plaintext)+int(padding))
 	copy(out, plaintext)
