@@ -8,12 +8,17 @@ import (
 	"github.com/aveplen-bach/authentication-service/internal/cryptoutil"
 	"github.com/aveplen-bach/authentication-service/internal/ginutil"
 	"github.com/aveplen-bach/authentication-service/internal/service"
+	"github.com/sirupsen/logrus"
 
 	"github.com/gin-gonic/gin"
 )
 
 func EndToEndEncryption(ts *service.TokenService, ss *service.SessionService) gin.HandlerFunc {
+	logrus.Info("auth check middleware registered")
+
 	return func(c *gin.Context) {
+		logrus.Info("auth check middleware triggered")
+
 		// decrypt request body
 
 		token, err := ginutil.ExtractToken(c)

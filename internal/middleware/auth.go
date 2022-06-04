@@ -11,6 +11,8 @@ import (
 
 func AuthCheck(as *service.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		logrus.Info("auth check middleware triggered")
+
 		token, err := ginutil.ExtractToken(c)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
