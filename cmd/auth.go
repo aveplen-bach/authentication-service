@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -37,59 +37,86 @@ func main() {
 
 	// ============================== fr client ===============================
 
-	frDialContext, frCancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer frCancel()
+	var wg sync.WaitGroup
 
-	frAddr := "localhost:8081"
-	frcc, err := grpc.DialContext(frDialContext, frAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	frch := make(chan facerec.FaceRecognitionClient)
+	wg.Add(1)
+	go func() {
+		wg.Done()
 
-	if err != nil {
-		logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", frAddr, err))
-	}
+		frDialContext, frCancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer frCancel()
 
-	fr := facerec.NewFaceRecognitionClient(frcc)
-	logrus.Warn(fr)
+		frAddr := "localhost:8082"
+		frcc, err := grpc.DialContext(frDialContext, frAddr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+		if err != nil {
+			logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", frAddr, err))
+		}
+
+		frch <- facerec.NewFaceRecognitionClient(frcc)
+	}()
 
 	// ============================== s3g client ==============================
 
-	s3DialContext, s3Cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer s3Cancel()
+	s3ch := make(chan s3file.S3GatewayClient)
+	wg.Add(1)
+	go func() {
+		wg.Done()
 
-	s3addr := "localhost:9090"
-	s3cc, err := grpc.DialContext(s3DialContext, s3addr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
+		s3DialContext, s3Cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer s3Cancel()
 
-	if err != nil {
-		logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", frAddr, err))
-	}
+		s3Addr := "localhost:8083"
+		s3cc, err := grpc.DialContext(s3DialContext, s3Addr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()))
 
-	s3 := s3file.NewS3GatewayClient(s3cc)
-	logrus.Warn(s3)
+		if err != nil {
+			logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", s3Addr, err))
+		}
+
+		s3ch <- s3file.NewS3GatewayClient(s3cc)
+	}()
+
+	// ============================== client coll =============================
+
+	fr := <-frch
+	s3 := <-s3ch
+
+	wg.Wait()
+
+	logrus.Warn("s3 gateway server: ", s3)
+	logrus.Warn("face recognition server: ", fr)
 
 	// ================================ service ===============================
 
+	us := service.NewUserService(db)
 	ss := service.NewSessionService()
 	ts := service.NewTokenService()
+	s3s := service.NewS3Service(s3)
+	fs := service.NewFacerecService(fr)
 
-	s := service.NewService(db, ss, ts, fr, s3)
+	ps := service.NewPhotoService(fs, s3s)
+
+	as := service.NewAuthService(ts)
+	ls := service.NewLoginService(us, ss, ts, ps)
+	rs := service.NewRegisterService(us, ps)
 
 	// ================================ router ================================
 
 	router := gin.Default()
-	router.Use(middleware.Cors)
-
-	// ============================== controller ==============================
-
-	login := controller.NewLoginController(s)
-	register := controller.NewRegisterController(s)
-	users := controller.NewUserController(s)
+	router.Use(middleware.Cors())
+	router.Use(middleware.IncrementalToken(ts))
+	router.Use(middleware.AuthCheck(as))
+	router.Use(middleware.EndToEndEncryption(ts, ss))
 
 	// ================================ routes ================================
 
-	router.POST("/api/v1/login", login.LoginUser)
-	router.POST("/api/v1/register", register.RegisterUser)
-	router.POST("/api/v1/users", users.ListUsers)
+	router.POST("/api/login", controller.LoginUser(ls))
+	router.POST("/api/register", controller.RegisterUser(rs))
+
+	router.GET("/api/user", controller.ListUsers(us))
 
 	// =============================== shutdown ===============================
 
@@ -99,22 +126,23 @@ func main() {
 	}
 
 	go func() {
+		logrus.Infof("listening: %s\n", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && errors.Is(err, http.ErrServerClosed) {
-			log.Printf("listen: %s\n", err)
+			logrus.Warn(err)
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutting down server...")
+	logrus.Warn("shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
+		logrus.Fatal("Server forced to shutdown:", err)
 	}
 
-	log.Println("Server exiting")
+	logrus.Warn("server exited")
 }
