@@ -131,18 +131,43 @@ func main() {
 	protected := r.Group("/api/protected")
 	protected.Use(middleware.AuthCheck(as))
 	protected.Use(middleware.IncrementalToken(ts))
-	protected.Use(middleware.EndToEndEncryption(ts, ss))
 
 	open := r.Group("/api/open")
 
+	admin := r.Group("/api/admin")
+	admin.Use(middleware.IncrementalToken(ts))
+	admin.Use(middleware.AuthCheck(as))
+	admin.Use(middleware.EndToEndEncryption(ts, ss))
 	// ================================ routes ================================
+
+	admin.GET("/user", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"users": []gin.H{
+				{
+					"username": "vasya",
+				},
+			},
+		})
+	})
+
+	open.GET("/about", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"about": "about",
+		})
+	})
+
+	protected.GET("/authenticated", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"authenticated": true,
+		})
+	})
 
 	protected.POST("/register", controller.RegisterUser(rs))
 	protected.GET("/users", controller.ListUsers(us))
 	protected.POST("/incremental", func(c *gin.Context) {
 		token, err := ginutil.ExtractToken(c)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return
@@ -150,7 +175,7 @@ func main() {
 
 		next, err := ts.NextToken(token)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return
@@ -166,7 +191,7 @@ func main() {
 	open.POST("/hello", func(c *gin.Context) {
 		var req HelloRequest
 		if err := c.BindJSON(&req); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return
@@ -174,7 +199,7 @@ func main() {
 
 		session, err := ss.New(uint(req.UserID))
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return
@@ -185,7 +210,7 @@ func main() {
 
 		token, err := ts.GenerateToken(uint(req.UserID))
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return

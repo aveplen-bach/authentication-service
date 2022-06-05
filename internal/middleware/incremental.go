@@ -1,7 +1,9 @@
 package middleware
 
 import (
-	"fmt"
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/aveplen-bach/authentication-service/internal/ginutil"
@@ -18,7 +20,8 @@ func IncrementalToken(ts *service.TokenService) gin.HandlerFunc {
 
 		token, err := ginutil.ExtractToken(c)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			logrus.Warn(err)
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return
@@ -26,14 +29,50 @@ func IncrementalToken(ts *service.TokenService) gin.HandlerFunc {
 
 		next, err := ts.NextToken(token)
 		if err != nil {
+			logrus.Warn(err)
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return
 		}
 
+		bw := &bodyWriter{body: new(bytes.Buffer), ResponseWriter: c.Writer}
+		c.Writer = bw
+
 		c.Next()
 
-		c.Header("Authorizatoin", fmt.Sprintf("Bearer %s", next))
+		resb, err := ioutil.ReadAll(bw.body)
+		if err != nil {
+			logrus.Fatal(err)
+		}
+
+		// я хочу умереть, глядя на этот код, но чтобы сделать переписать его красиво,
+		// нужно время, которого у меня нет)))
+		var newresb []byte
+		if len(resb) == 0 {
+			newresb, err = json.Marshal(gin.H{
+				"next": next,
+			})
+		} else {
+			var unmr interface{}
+			if err = json.Unmarshal(resb, &unmr); err != nil {
+				newresb, err = json.Marshal(gin.H{
+					"next": next,
+					"data": string(resb),
+				})
+			} else {
+				newresb, err = json.Marshal(gin.H{
+					"next": next,
+					"data": unmr.(map[string]interface{}),
+				})
+			}
+		}
+
+		if err != nil {
+			logrus.Fatal(err)
+		}
+
+		c.Writer = bw.ResponseWriter
+		c.Writer.Write(newresb)
 	}
 }

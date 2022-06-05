@@ -13,7 +13,7 @@ func RegisterUser(rs *service.RegisterService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := &model.RegisterRequest{}
 		if err := c.BindJSON(req); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return
@@ -22,7 +22,7 @@ func RegisterUser(rs *service.RegisterService) gin.HandlerFunc {
 		err := rs.Register(req)
 
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return

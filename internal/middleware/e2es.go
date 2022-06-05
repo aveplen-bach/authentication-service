@@ -8,6 +8,7 @@ import (
 
 	"github.com/aveplen-bach/authentication-service/internal/cryptoutil"
 	"github.com/aveplen-bach/authentication-service/internal/ginutil"
+	"github.com/aveplen-bach/authentication-service/internal/model"
 	"github.com/aveplen-bach/authentication-service/internal/service"
 	"github.com/sirupsen/logrus"
 
@@ -15,16 +16,15 @@ import (
 )
 
 func EndToEndEncryption(ts *service.TokenService, ss *service.SessionService) gin.HandlerFunc {
-	logrus.Info("auth check middleware registered")
+	logrus.Info("end to end enctyption middleware registered")
 
 	return func(c *gin.Context) {
-		logrus.Info("auth check middleware triggered")
-
-		// decrypt request body
+		logrus.Info("end to end enctyption middleware triggered")
 
 		token, err := ginutil.ExtractToken(c)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			logrus.Warn(err)
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return
@@ -32,7 +32,8 @@ func EndToEndEncryption(ts *service.TokenService, ss *service.SessionService) gi
 
 		payload, err := ts.ExtractPayload(token)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
+			logrus.Warn(err)
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
 			return
@@ -40,67 +41,60 @@ func EndToEndEncryption(ts *service.TokenService, ss *service.SessionService) gi
 
 		session, err := ss.Get(uint(payload.UserID))
 		if err != nil {
+			logrus.Warn(err)
 			c.JSON(http.StatusNotFound, gin.H{
 				"err": "you are not logged in or token is damaged",
 			})
 			return
 		}
 
-		b64EncReqBody, err := ioutil.ReadAll(c.Request.Body)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-				"err": err.Error(),
-			})
-			return
+		if c.Request.Method == "GET" || c.Request.Method == "" {
+			logrus.Info("skipping body decripton due to get request")
+		} else {
+			decryptReqBody(c, session)
 		}
-		defer c.Request.Body.Close()
-
-		encReqBody, err := base64.StdEncoding.DecodeString(string(b64EncReqBody))
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-				"err": err.Error(),
-			})
-			return
-		}
-
-		reqBody, err := cryptoutil.DecryptAesCbc(encReqBody, session.SessionKey, session.IV)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
-				"err": err.Error(),
-			})
-			return
-		}
-
-		c.Request.Body = ioutil.NopCloser(bytes.NewReader(reqBody))
 
 		bw := &bodyWriter{body: new(bytes.Buffer), ResponseWriter: c.Writer}
 		c.Writer = bw
 
-		// pass to real handler
 		c.Next()
 
-		// encrypt resposne body
-		decResBody, err := ioutil.ReadAll(bw.body)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
-				"err": err.Error(),
-			})
-			return
-		}
-
-		resBody, err := cryptoutil.EncryptAesCbc(decResBody, session.SessionKey, session.IV)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
-				"err": err.Error(),
-			})
-			return
-		}
-
-		b64ResBody := []byte(base64.StdEncoding.EncodeToString(resBody))
-
-		c.Writer = bw.ResponseWriter
-		c.Writer.Write(b64ResBody)
+		encryptResBody(c, session, bw)
 	}
+}
+
+func decryptReqBody(c *gin.Context, session *model.SessionEntry) {
+	logrus.Info("decyrpting request body")
+
+	b64EncReqBody, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		logrus.Warn(err)
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+	defer c.Request.Body.Close()
+
+	encReqBody, err := base64.StdEncoding.DecodeString(string(b64EncReqBody))
+	if err != nil {
+		logrus.Warn(err)
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	reqBody, err := cryptoutil.DecryptAesCbc(encReqBody, session.SessionKey, session.IV)
+	if err != nil {
+		logrus.Warn(err)
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	c.Request.Body = ioutil.NopCloser(bytes.NewReader(reqBody))
 }
 
 type bodyWriter struct {
@@ -109,5 +103,33 @@ type bodyWriter struct {
 }
 
 func (w bodyWriter) Write(b []byte) (int, error) {
+	logrus.Info("piping body write into ")
 	return w.body.Write(b)
+}
+
+func encryptResBody(c *gin.Context, session *model.SessionEntry, bw *bodyWriter) {
+	logrus.Info("encyrpting response body")
+
+	decResBody, err := ioutil.ReadAll(bw.body)
+	if err != nil {
+		logrus.Warn(err)
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	resBody, err := cryptoutil.EncryptAesCbc(decResBody, session.SessionKey, session.IV)
+	if err != nil {
+		logrus.Warn(err)
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	b64ResBody := []byte(base64.StdEncoding.EncodeToString(resBody))
+
+	c.Writer = bw.ResponseWriter
+	c.Writer.Write(b64ResBody)
 }
