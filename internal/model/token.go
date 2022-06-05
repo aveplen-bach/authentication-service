@@ -13,8 +13,7 @@ type Header struct {
 }
 
 type Payload struct {
-	UserID    int `json:"userId"`
-	SessionID int `json:"sessionId"`
+	UserID int `json:"userId"`
 }
 
 type TokenRaw struct {
