@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -15,7 +13,6 @@ import (
 	"time"
 
 	"github.com/aveplen-bach/authentication-service/internal/controller"
-	"github.com/aveplen-bach/authentication-service/internal/ginutil"
 	"github.com/aveplen-bach/authentication-service/internal/middleware"
 	"github.com/aveplen-bach/authentication-service/internal/model"
 	"github.com/aveplen-bach/authentication-service/internal/service"
@@ -25,16 +22,11 @@ import (
 	"github.com/aveplen-bach/authentication-service/protos/s3file"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/crypto/pbkdf2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
-
-type HelloRequest struct {
-	UserID int `json:"userId"`
-}
 
 func main() {
 	// =============================== database ===============================
@@ -140,89 +132,16 @@ func main() {
 	admin.Use(middleware.EndToEndEncryption(ts, ss))
 	// ================================ routes ================================
 
-	admin.GET("/user", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"users": []gin.H{
-				{
-					"username": "vasya",
-				},
-			},
-		})
-	})
-
-	open.GET("/about", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"about": "about",
-		})
-	})
-
-	protected.GET("/authenticated", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"authenticated": true,
-		})
-	})
-
-	protected.POST("/register", controller.RegisterUser(rs))
+	protected.GET("/authenticated", controller.Authenticated(ts))
 	protected.GET("/users", controller.ListUsers(us))
-	protected.POST("/incremental", func(c *gin.Context) {
-		token, err := ginutil.ExtractToken(c)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-				"err": err.Error(),
-			})
-			return
-		}
+	protected.POST("/register", controller.RegisterUser(rs))
 
-		next, err := ts.NextToken(token)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-				"err": err.Error(),
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"status": "successfully created token",
-			"token":  next,
-		})
-	})
-
+	open.GET("/authenticated", controller.Authenticated(ts))
 	open.POST("/api/login", controller.LoginUser(ls))
-	open.POST("/hello", func(c *gin.Context) {
-		var req HelloRequest
-		if err := c.BindJSON(&req); err != nil {
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-				"err": err.Error(),
-			})
-			return
-		}
+	open.POST("/hello", controller.Hello(ss, ts))
 
-		session, err := ss.New(uint(req.UserID))
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-				"err": err.Error(),
-			})
-			return
-		}
-
-		session.SessionKey = pbkdf2.Key([]byte("password"), []byte("salt"), 4096, 16, sha1.New)
-		session.IV = make([]byte, 16)
-
-		token, err := ts.GenerateToken(uint(req.UserID))
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-				"err": err.Error(),
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"status": "successfully created token",
-			"token":  token,
-			"key":    base64.StdEncoding.EncodeToString(session.SessionKey),
-			"iv":     base64.StdEncoding.EncodeToString(session.IV),
-		})
-	})
+	admin.GET("/user", controller.ListUsers(us))
+	admin.POST("/register", controller.RegisterUser(rs))
 
 	// =============================== shutdown ===============================
 
