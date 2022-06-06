@@ -130,6 +130,9 @@ func main() {
 	admin.Use(middleware.IncrementalToken(ts))
 	admin.Use(middleware.AuthCheck(as))
 	admin.Use(middleware.EndToEndEncryption(ts, ss))
+
+	local := r.Group("/api/local")
+	local.Use(middleware.Localhost())
 	// ================================ routes ================================
 
 	protected.GET("/authenticated", controller.Authenticated(ts))
@@ -138,10 +141,11 @@ func main() {
 
 	open.GET("/authenticated", controller.Authenticated(ts))
 	open.POST("/api/login", controller.LoginUser(ls))
-	open.POST("/hello", controller.Hello(ss, ts))
 
 	admin.GET("/user", controller.ListUsers(us))
 	admin.POST("/register", controller.RegisterUser(rs))
+
+	local.GET("/hello", controller.Hello(ss, ts))
 
 	// =============================== shutdown ===============================
 

@@ -1,0 +1,9 @@
+HTTP/1.1 404 Not Found
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Headers: Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With
+Access-Control-Allow-Methods: POST, OPTIONS, GET, PUT
+Access-Control-Allow-Origin: *
+Content-Type: text/plain
+Date: Mon, 06 Jun 2022 03:49:32 GMT
+Content-Length: 18
+
