@@ -35,6 +35,7 @@ func (rs *RegisterService) Register(rreq *model.RegisterRequest) error {
 		Username: rreq.Username,
 		Password: rreq.Password,
 		FFVector: util.SerializeFloats64(vecotr),
+		Admin:    rreq.Admin,
 	}
 
 	if err := rs.us.NewUser(user); err != nil {
