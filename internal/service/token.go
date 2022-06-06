@@ -75,6 +75,9 @@ func (t *TokenService) NextToken(token string) (string, error) {
 		return "", fmt.Errorf("could not pack token: %w", err)
 	}
 
+	logrus.Info("setting new current token for %d", protected.Payload.UserID)
+	s.Current = repacked
+
 	return repacked, nil
 }
 
@@ -106,27 +109,32 @@ func (t *TokenService) NextSyn(userID uint, protected []byte) ([]byte, error) {
 		return nil, fmt.Errorf("could not encrypt syn: %w", err)
 	}
 
+	cur, err := unpack(s.Current)
+	if err != nil {
+		return nil, fmt.Errorf("could not unpack current: %w", err)
+	}
+
+	unprot, err := unprotect(cur, s.SessionKey, s.IV)
+	if err != nil {
+		return nil, fmt.Errorf("could not unprotect current: %w", err)
+	}
+
+	unprot.Synchronization = syn
+
+	prot, err := protect(unprot, s.SessionKey, s.IV)
+	if err != nil {
+		return nil, fmt.Errorf("could not reprotect current: %w", err)
+	}
+
+	repacked, err := pack(prot)
+	if err != nil {
+		return nil, fmt.Errorf("could not repack current: %w", err)
+	}
+
+	s.Current = repacked
+
 	return updatedProtected, nil
 }
-
-// func Sign(msg, key []byte) string {
-// 	mac := hmac.New(sha256.New, key)
-// 	mac.Write(msg)
-
-// 	return hex.EncodeToString(mac.Sum(nil))
-// }
-
-// func Verify(msg, key []byte, hash string) (bool, error) {
-// 	sig, err := hex.DecodeString(hash)
-// 	if err != nil {
-// 		return false, err
-// 	}
-
-// 	mac := hmac.New(sha256.New, key)
-// 	mac.Write(msg)
-
-// 	return hmac.Equal(sig, mac.Sum(nil)), nil
-// }
 
 func (t *TokenService) ValidateToken(token string) (bool, error) {
 	protected, err := unpack(token)
@@ -134,7 +142,83 @@ func (t *TokenService) ValidateToken(token string) (bool, error) {
 		return false, fmt.Errorf("could not unpack token: %w", err)
 	}
 
-	logrus.Warn("Validate token not implemented", protected)
+	session, err := t.ss.Get(uint(protected.Payload.UserID))
+	if err != nil {
+		return false, fmt.Errorf("could not get session: %w", err)
+	}
+
+	unprotected, err := unprotect(protected, session.SessionKey, session.IV)
+	if err != nil {
+		return false, fmt.Errorf("could not unprotect token: %w", err)
+	}
+
+	curprot, err := unpack(session.Current)
+	if err != nil {
+		return false, fmt.Errorf("could not unpack current token: %w", err)
+	}
+
+	curunprot, err := unprotect(curprot, session.SessionKey, session.IV)
+	if err != nil {
+		return false, fmt.Errorf("could not unprotect current token: %w", err)
+	}
+
+	if unprotected.Synchronization.Syn+unprotected.Synchronization.Inc != curunprot.Synchronization.Syn {
+		return false, fmt.Errorf("syn is invalid")
+	}
+
+	headb, err := json.Marshal(protected.Header)
+	if err != nil {
+		return false, fmt.Errorf("could not marshal header: %w", err)
+	}
+
+	pldb, err := json.Marshal(protected.Payload)
+	if err != nil {
+		return false, fmt.Errorf("could not marshal payload: %w", err)
+	}
+
+	secret := "mysecret"
+	data := fmt.Sprintf(
+		"%s.%s",
+		base64.StdEncoding.EncodeToString(headb),
+		base64.StdEncoding.EncodeToString(pldb))
+
+	h := hmac.New(sha256.New, []byte(secret))
+	if _, err := h.Write([]byte(data)); err != nil {
+		return false, fmt.Errorf("could not create sign: %w", err)
+	}
+
+	return hmac.Equal(protected.SignatureBytes, h.Sum(nil)), nil
+}
+
+func (t *TokenService) ValidateSyn(userID uint, protected []byte) (bool, error) {
+	session, err := t.ss.Get(uint(userID))
+	if err != nil {
+		return false, fmt.Errorf("could not get session: %w", err)
+	}
+
+	raw, err := cryptoutil.DecryptAesCbc(protected, session.SessionKey, session.IV)
+	if err != nil {
+		return false, fmt.Errorf("could not decrypt syn: %w", err)
+	}
+
+	var syn model.Synchronization
+	if err := json.Unmarshal(raw, &syn); err != nil {
+		return false, fmt.Errorf("could not unmarshal syn: %w", err)
+	}
+
+	curprot, err := unpack(session.Current)
+	if err != nil {
+		return false, fmt.Errorf("could not unpack current token: %w", err)
+	}
+
+	curunprot, err := unprotect(curprot, session.SessionKey, session.IV)
+	if err != nil {
+		return false, fmt.Errorf("could not unprotect current token: %w", err)
+	}
+
+	if syn.Syn+syn.Inc != curunprot.Synchronization.Syn {
+		return false, fmt.Errorf("syn is invalid")
+	}
 
 	return true, nil
 }
@@ -289,6 +373,7 @@ func defaultHead() model.Header {
 func defaultPld(userID uint) model.Payload {
 	return model.Payload{
 		UserID: int(userID),
+		Admin:  true,
 	}
 }
 

@@ -132,7 +132,6 @@ func main() {
 	admin.Use(middleware.EndToEndEncryption(ts, ss))
 
 	local := r.Group("/api/local")
-	local.Use(middleware.Localhost())
 	// ================================ routes ================================
 
 	protected.GET("/authenticated", controller.Authenticated(ts))
@@ -145,7 +144,7 @@ func main() {
 	admin.GET("/user", controller.ListUsers(us))
 	admin.POST("/register", controller.RegisterUser(rs))
 
-	local.GET("/hello", controller.Hello(ss, ts))
+	local.POST("/hello", controller.Hello(ss, ts))
 
 	// =============================== shutdown ===============================
 

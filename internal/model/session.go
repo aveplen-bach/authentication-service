@@ -4,4 +4,5 @@ type SessionEntry struct {
 	LoginMAC   string
 	SessionKey []byte
 	IV         []byte
+	Current    string
 }
