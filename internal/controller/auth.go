@@ -22,6 +22,7 @@ func Authenticated(ts *service.TokenService) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
+			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{
