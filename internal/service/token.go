@@ -138,7 +138,7 @@ func (t *TokenService) ValidateToken(token string) (bool, error) {
 		return false, fmt.Errorf("could not unprotect current token: %w", err)
 	}
 
-	if curunprot.Synchronization.Syn+curunprot.Synchronization.Inc != unprotected.Synchronization.Syn {
+	if unprotected.Synchronization.Syn+unprotected.Synchronization.Inc != curunprot.Synchronization.Syn {
 		return false, fmt.Errorf("syn is invalid")
 	}
 
