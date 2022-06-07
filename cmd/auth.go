@@ -18,6 +18,7 @@ import (
 	"github.com/aveplen-bach/authentication-service/internal/service"
 	"github.com/aveplen-bach/authentication-service/internal/transport"
 	"github.com/aveplen-bach/authentication-service/protos/auth"
+	"github.com/aveplen-bach/authentication-service/protos/config"
 	"github.com/aveplen-bach/authentication-service/protos/facerec"
 	"github.com/aveplen-bach/authentication-service/protos/s3file"
 	"github.com/gin-gonic/gin"
@@ -38,59 +39,82 @@ func main() {
 
 	db.AutoMigrate(&model.User{})
 
-	// ============================== fr client ===============================
+	// ============================== s3g client ==============================
 
 	var wg sync.WaitGroup
-
-	frch := make(chan facerec.FaceRecognitionClient)
-	wg.Add(1)
-	go func() {
-		wg.Done()
-
-		frDialContext, frCancel := context.WithTimeout(context.Background(), 1*time.Second)
-		defer frCancel()
-
-		frAddr := "localhost:8082"
-		frcc, err := grpc.DialContext(frDialContext, frAddr,
-			grpc.WithTransportCredentials(insecure.NewCredentials()))
-
-		if err != nil {
-			logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", frAddr, err))
-		}
-
-		frch <- facerec.NewFaceRecognitionClient(frcc)
-	}()
-
-	// ============================== s3g client ==============================
 
 	s3ch := make(chan s3file.S3GatewayClient)
 	wg.Add(1)
 	go func() {
 		wg.Done()
 
-		s3DialContext, s3Cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		defer s3Cancel()
+		dialContext, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
 
-		s3Addr := "localhost:8083"
-		s3cc, err := grpc.DialContext(s3DialContext, s3Addr,
+		s3Addr := "localhost:30031"
+		cc, err := grpc.DialContext(dialContext, s3Addr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 		if err != nil {
 			logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", s3Addr, err))
 		}
 
-		s3ch <- s3file.NewS3GatewayClient(s3cc)
+		s3ch <- s3file.NewS3GatewayClient(cc)
+	}()
+
+	// ============================== fr client ===============================
+
+	frch := make(chan facerec.FaceRecognitionClient)
+	wg.Add(1)
+	go func() {
+		wg.Done()
+
+		dialContext, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+
+		frAddr := "localhost:30032"
+		cc, err := grpc.DialContext(dialContext, frAddr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+		if err != nil {
+			logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", frAddr, err))
+		}
+
+		frch <- facerec.NewFaceRecognitionClient(cc)
+	}()
+
+	// ========================== config client ===========================
+
+	cfgch := make(chan config.ConfigClient)
+	wg.Add(1)
+	go func() {
+		wg.Done()
+
+		dialContext, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+
+		cfgAddr := "localhost:30033"
+		cc, err := grpc.DialContext(dialContext, cfgAddr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+		if err != nil {
+			logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", cfgAddr, err))
+		}
+
+		cfgch <- config.NewConfigClient(cc)
 	}()
 
 	// ============================== client wait =============================
 
-	fr := <-frch
 	s3 := <-s3ch
+	fr := <-frch
+	cfg := <-cfgch
 
 	wg.Wait()
 
-	logrus.Warn("s3 gateway server: ", s3)
 	logrus.Warn("face recognition server: ", fr)
+	logrus.Warn("s3 gateway server: ", s3)
+	logrus.Warn("config server: ", cfg)
 
 	// ================================ service ===============================
 
@@ -107,7 +131,7 @@ func main() {
 
 	// ============================= grpc server ==============================
 
-	lis, err := net.Listen("tcp", "localhost:30031")
+	lis, err := net.Listen("tcp", "localhost:30030")
 	if err != nil {
 		logrus.Fatalf("failed to listen: %v", err)
 	}
