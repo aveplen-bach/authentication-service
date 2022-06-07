@@ -21,7 +21,21 @@ func AuthCheck(as *service.AuthService) gin.HandlerFunc {
 			return
 		}
 
-		logrus.Warn(token)
+		valid, err := as.IsAuthenticated(token)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
+
+		if !valid {
+			logrus.Warn("token %s not valid", token)
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+				"err": "token is not valid",
+			})
+			return
+		}
 
 		c.Next()
 	}
