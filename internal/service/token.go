@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strings"
 
 	"github.com/aveplen-bach/authentication-service/internal/cryptoutil"
@@ -340,10 +341,10 @@ func unpack(token string) (model.TokenProtected, error) {
 }
 
 func construct(userID uint) (model.TokenRaw, error) {
-	syn := defaultSyn()
-	head := defaultHead()
-	pld := defaultPld(userID)
-	sign, err := defaultSign(head, pld)
+	syn := constructSynchronization()
+	head := constructHead()
+	pld := constructPayload(userID)
+	sign, err := constructSignature(head, pld)
 	if err != nil {
 		return model.TokenRaw{}, fmt.Errorf("could not construct token: %w", err)
 	}
@@ -356,28 +357,28 @@ func construct(userID uint) (model.TokenRaw, error) {
 	}, nil
 }
 
-func defaultSyn() model.Synchronization {
+func constructSynchronization() model.Synchronization {
 	return model.Synchronization{
-		Syn: 1,
-		Inc: 1,
+		Syn: rand.Intn(10000),
+		Inc: rand.Intn(10000),
 	}
 }
 
-func defaultHead() model.Header {
+func constructHead() model.Header {
 	return model.Header{
 		SignatureAlg:  "HMACSHA256",
 		EncryptionAlg: "AESCBC",
 	}
 }
 
-func defaultPld(userID uint) model.Payload {
+func constructPayload(userID uint) model.Payload {
 	return model.Payload{
 		UserID: int(userID),
 		Admin:  true,
 	}
 }
 
-func defaultSign(header model.Header, payload model.Payload) ([]byte, error) {
+func constructSignature(header model.Header, payload model.Payload) ([]byte, error) {
 	headb, err := json.Marshal(header)
 	if err != nil {
 		return nil, fmt.Errorf("could not marshal header: %w", err)
@@ -400,4 +401,33 @@ func defaultSign(header model.Header, payload model.Payload) ([]byte, error) {
 	}
 
 	return h.Sum(nil), nil
+}
+
+func validateSynchronization(cur, next model.Synchronization) bool {
+	return cur.Syn+cur.Inc == next.Syn
+}
+
+func validateSignature(signature []byte, header model.Header, payload model.Payload) (bool, error) {
+	headb, err := json.Marshal(header)
+	if err != nil {
+		return false, fmt.Errorf("could not marshal header: %w", err)
+	}
+
+	pldb, err := json.Marshal(payload)
+	if err != nil {
+		return false, fmt.Errorf("could not marshal payload: %w", err)
+	}
+
+	secret := "mysecret"
+	data := fmt.Sprintf(
+		"%s.%s",
+		base64.StdEncoding.EncodeToString(headb),
+		base64.StdEncoding.EncodeToString(pldb))
+
+	h := hmac.New(sha256.New, []byte(secret))
+	if _, err := h.Write([]byte(data)); err != nil {
+		return false, fmt.Errorf("could not create sign: %w", err)
+	}
+
+	return hmac.Equal(signature, h.Sum(nil)), nil
 }
