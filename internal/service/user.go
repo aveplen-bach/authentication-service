@@ -17,7 +17,7 @@ func NewUserService(db *gorm.DB) *UserService {
 	}
 }
 
-func (us *UserService) GetAllUsers() ([]model.User, error) {
+func (us *UserService) GetAllUsers() ([]model.UserDto, error) {
 	var users []model.User
 	result := us.db.Find(&users)
 
@@ -25,7 +25,18 @@ func (us *UserService) GetAllUsers() ([]model.User, error) {
 		return nil, fmt.Errorf("could not fetch users from db: %w", result.Error)
 	}
 
-	return users, nil
+	var userDtos []model.UserDto
+	for _, user := range users {
+		userDtos = append(userDtos, model.UserDto{
+			UserID:    user.ID,
+			Username:  user.Username,
+			Admin:     user.Admin,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+		})
+	}
+
+	return userDtos, nil
 }
 
 func (us *UserService) GetUserByUsername(username string) (*model.User, error) {
