@@ -43,3 +43,10 @@ func (s *SessionService) New(userID uint) (*model.SessionEntry, error) {
 
 	return newSessoinEntry, nil
 }
+
+func (s *SessionService) Destroy(userID uint) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.store, userID)
+}
