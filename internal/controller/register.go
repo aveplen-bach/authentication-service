@@ -19,9 +19,7 @@ func RegisterUser(rs *service.RegisterService) gin.HandlerFunc {
 			return
 		}
 
-		err := rs.Register(req)
-
-		if err != nil {
+		if err := rs.Register(req); err != nil {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
