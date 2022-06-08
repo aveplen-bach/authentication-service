@@ -161,8 +161,6 @@ func main() {
 	// ================================ routes ================================
 
 	protected.POST("/authenticated", controller.Authenticated(ts))
-	protected.POST("/users", controller.ListUsers(us))
-	protected.POST("/register", controller.RegisterUser(rs))
 	protected.POST("/logout", controller.Logout(los))
 
 	open.POST("/login", controller.LoginUser(ls))
