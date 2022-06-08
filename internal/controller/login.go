@@ -18,7 +18,7 @@ func LoginUser(ls *service.LoginService) gin.HandlerFunc {
 			return
 		}
 
-		res, err := ls.Login(req)
+		login, err := ls.Login(req)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
@@ -27,6 +27,6 @@ func LoginUser(ls *service.LoginService) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, res)
+		c.JSON(http.StatusOK, login)
 	}
 }
