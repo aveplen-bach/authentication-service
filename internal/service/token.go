@@ -24,8 +24,8 @@ func NewTokenService(ss *SessionService) *TokenService {
 	}
 }
 
-func (t *TokenService) GenerateToken(userID uint) (string, error) {
-	raw, err := construct(userID)
+func (t *TokenService) GenerateToken(userID uint, admin bool) (string, error) {
+	raw, err := construct(userID, admin)
 	if err != nil {
 		return "", fmt.Errorf("could not construct token: %w", err)
 	}
@@ -151,6 +151,10 @@ func (t *TokenService) ValidateToken(token string) (bool, error) {
 	unprotected, err := unprotect(protected, session.SessionKey, session.IV)
 	if err != nil {
 		return false, fmt.Errorf("could not unprotect token: %w", err)
+	}
+
+	if len(session.Current) == 0 {
+		return true, nil
 	}
 
 	curprot, err := unpack(session.Current)
@@ -340,10 +344,10 @@ func unpack(token string) (model.TokenProtected, error) {
 	}, nil
 }
 
-func construct(userID uint) (model.TokenRaw, error) {
+func construct(userID uint, admin bool) (model.TokenRaw, error) {
 	syn := constructSynchronization()
 	head := constructHead()
-	pld := constructPayload(userID)
+	pld := constructPayload(userID, admin)
 	sign, err := constructSignature(head, pld)
 	if err != nil {
 		return model.TokenRaw{}, fmt.Errorf("could not construct token: %w", err)
@@ -371,10 +375,10 @@ func constructHead() model.Header {
 	}
 }
 
-func constructPayload(userID uint) model.Payload {
+func constructPayload(userID uint, admin bool) model.Payload {
 	return model.Payload{
 		UserID: int(userID),
-		Admin:  true,
+		Admin:  admin,
 	}
 }
 
