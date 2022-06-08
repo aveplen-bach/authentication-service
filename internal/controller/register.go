@@ -27,7 +27,7 @@ func RegisterUser(rs *service.RegisterService) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"info": fmt.Sprintf("user <%s> registered successfully", req.Username),
+			"info": fmt.Sprintf("user %s registered successfully", req.Username),
 		})
 	}
 }
