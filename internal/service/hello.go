@@ -22,9 +22,9 @@ func NewHelloService(ss *SessionService, ts *TokenService) *HelloService {
 }
 
 type HelloCridentials struct {
-	Token string
-	Key   string
-	IV    string
+	Token string `json:"token"`
+	Key   string `json:"key"`
+	IV    string `json:"iv"`
 }
 
 func (h *HelloService) Hello(userID uint) (HelloCridentials, error) {
