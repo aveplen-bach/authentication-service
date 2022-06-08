@@ -128,6 +128,8 @@ func main() {
 	ls := service.NewLoginService(us, ss, ts, ps)
 	rs := service.NewRegisterService(us, ps)
 	s := service.NewService(ts)
+	los := service.NewLogoutService(ts, ss)
+	hs := service.NewHelloService(ss, ts)
 
 	// ============================= grpc server ==============================
 
@@ -158,17 +160,17 @@ func main() {
 	local := r.Group("/api/local")
 	// ================================ routes ================================
 
-	protected.GET("/authenticated", controller.Authenticated(ts))
-	protected.GET("/users", controller.ListUsers(us))
+	protected.POST("/authenticated", controller.Authenticated(ts))
+	protected.POST("/users", controller.ListUsers(us))
 	protected.POST("/register", controller.RegisterUser(rs))
+	protected.POST("/logout", controller.Logout(los))
 
-	open.GET("/authenticated", controller.Authenticated(ts))
 	open.POST("/login", controller.LoginUser(ls))
 
-	admin.GET("/user", controller.ListUsers(us))
+	admin.POST("/user", controller.ListUsers(us))
 	admin.POST("/register", controller.RegisterUser(rs))
 
-	local.POST("/hello", controller.Hello(ss, ts))
+	local.POST("/hello", controller.Hello(hs))
 
 	// =============================== shutdown ===============================
 
