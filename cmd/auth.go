@@ -48,7 +48,7 @@ func main() {
 	go func() {
 		wg.Done()
 
-		dialContext, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		dialContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
 		s3Addr := "localhost:30031"
@@ -69,7 +69,7 @@ func main() {
 	go func() {
 		wg.Done()
 
-		dialContext, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		dialContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
 		frAddr := "localhost:30032"
@@ -90,7 +90,7 @@ func main() {
 	go func() {
 		wg.Done()
 
-		dialContext, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		dialContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
 		cfgAddr := "localhost:30033"
@@ -163,7 +163,7 @@ func main() {
 	protected.POST("/register", controller.RegisterUser(rs))
 
 	open.GET("/authenticated", controller.Authenticated(ts))
-	open.POST("/api/login", controller.LoginUser(ls))
+	open.POST("/login", controller.LoginUser(ls))
 
 	admin.GET("/user", controller.ListUsers(us))
 	admin.POST("/register", controller.RegisterUser(rs))

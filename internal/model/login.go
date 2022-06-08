@@ -8,9 +8,8 @@ type LoginRequest struct {
 	Username string `json:"username"`
 
 	// must be present in second client message (client cridentials stage)
-	UserID         int    `json:"userId"`
-	EncryptedPhoto string `json:"cipher"`
-	IV             string `json:"iv"`
+	EncryptedPhoto *string `json:"cipher"`
+	IV             *string `json:"iv"`
 }
 
 type LoginResponse struct {
@@ -18,8 +17,7 @@ type LoginResponse struct {
 	Stage int `json:"stage"`
 
 	// must be present at first server message (server gen mac stage)
-	UserID   int    `json:"userId"`
-	LoginMAC string `json:"loginMac"`
+	LoginMAC string `json:"loginMac,omitempty"`
 
 	// must be present at second serve message (server token stage)
 	Token string `json:"token"`

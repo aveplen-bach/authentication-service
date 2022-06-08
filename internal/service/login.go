@@ -77,7 +77,6 @@ func (ls *LoginService) handleConnectionInit(lreq *model.LoginRequest) (*model.L
 
 	return &model.LoginResponse{
 		Stage:    STAGE_SERVER_GEN_MAC,
-		UserID:   int(user.ID),
 		LoginMAC: lmac,
 	}, nil
 }
@@ -91,7 +90,7 @@ func (ls *LoginService) handleCredentials(lreq *model.LoginRequest) (*model.Logi
 	}
 
 	// get users session
-	session, err := ls.session.Get(uint(lreq.UserID))
+	session, err := ls.session.Get(user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("could not get user session: %w", err)
 	}
@@ -105,16 +104,25 @@ func (ls *LoginService) handleCredentials(lreq *model.LoginRequest) (*model.Logi
 	// save session key
 	session.SessionKey = skey
 
+	if lreq.EncryptedPhoto == nil {
+		return nil, fmt.Errorf("photo cipher is not present")
+	}
+
 	// decrypt photo
-	photoCipher, err := base64.StdEncoding.DecodeString(lreq.EncryptedPhoto)
+	photoCipher, err := base64.StdEncoding.DecodeString(*lreq.EncryptedPhoto)
 	if err != nil {
 		return nil, err
 	}
 
-	iv, err := base64.StdEncoding.DecodeString(lreq.IV)
+	if lreq.IV == nil {
+		return nil, fmt.Errorf("iv cipher is not present")
+	}
+
+	iv, err := base64.StdEncoding.DecodeString(*lreq.IV)
 	if err != nil {
 		return nil, err
 	}
+	session.IV = iv
 
 	photo, err := cryptoutil.DecryptAesCbc(photoCipher, skey, iv)
 	if err != nil {
