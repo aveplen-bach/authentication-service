@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 
 	"github.com/aveplen-bach/authentication-service/internal/cryptoutil"
 	"github.com/aveplen-bach/authentication-service/internal/model"
@@ -315,6 +316,7 @@ func pack(protected model.TokenProtected) (string, error) {
 	), nil
 }
 
+// Deprecated - use nunpack(token) instead
 func unpack(token string) (model.TokenProtected, error) {
 	tokenParts := strings.Split(token, ".")
 	if len(tokenParts) != 4 {
@@ -356,6 +358,20 @@ func unpack(token string) (model.TokenProtected, error) {
 		Payload:              payload,
 		SignatureBytes:       sign,
 	}, nil
+}
+
+func nunpack(token string) (model.TokenProtected, error) {
+	tparts, err := lex(token)
+	if err != nil {
+		return model.TokenProtected{}, fmt.Errorf("could not lex: %w", err)
+	}
+
+	parsed, err := parse(tparts)
+	if err != nil {
+		return model.TokenProtected{}, fmt.Errorf("could not parse: %w", err)
+	}
+
+	return parsed, nil
 }
 
 func constructAdmin(userID uint) (model.TokenRaw, error) {
@@ -440,6 +456,149 @@ func constructSignature(header model.Header, payload model.Payload) ([]byte, err
 	}
 
 	return h.Sum(nil), nil
+}
+
+type tparts struct {
+	syn  string
+	head string
+	pld  string
+	sign string
+}
+
+func lex(token string) (tparts, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 4 {
+		return tparts{}, fmt.Errorf("token should consist of 4 parts")
+	}
+
+	return tparts{
+		syn:  parts[0],
+		head: parts[1],
+		pld:  parts[2],
+		sign: parts[3],
+	}, nil
+}
+
+func parse(tparts tparts) (model.TokenProtected, error) {
+	var protected model.TokenProtected
+	mu := new(sync.Mutex)
+	wg := new(sync.WaitGroup)
+
+	errch := make(chan error, 4)
+	defer close(errch)
+
+	wg.Add(1)
+	go func(errch chan<- error) {
+		defer wg.Done()
+		synb, err := decode(tparts.syn)
+
+		if err != nil {
+			errch <- err
+			return
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		protected.SynchronizationBytes = synb
+	}(errch)
+
+	wg.Add(1)
+	go func(errch chan<- error) {
+		defer wg.Done()
+		head, err := phead(tparts.head)
+		if err != nil {
+			errch <- err
+			return
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		protected.Header = head
+	}(errch)
+
+	wg.Add(1)
+	go func(errch chan<- error) {
+		defer wg.Done()
+		pld, err := ppld(tparts.pld)
+		if err != nil {
+			errch <- err
+			return
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		protected.Payload = pld
+	}(errch)
+
+	wg.Add(1)
+	go func(errch chan<- error) {
+		defer wg.Done()
+		signb, err := decode(tparts.sign)
+
+		if err != nil {
+			errch <- err
+			return
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		protected.SignatureBytes = signb
+	}(errch)
+
+	wg.Wait()
+	for err := range errch {
+		return model.TokenProtected{}, err
+	}
+
+	return protected, nil
+}
+
+func phead(head string) (model.Header, error) {
+	headb, err := decode(head)
+	if err != nil {
+		return model.Header{}, fmt.Errorf("could not decode head: %w", err)
+	}
+
+	headp, err := unmhead(headb)
+	if err != nil {
+		return model.Header{}, fmt.Errorf("could not unmarshal head: %w", err)
+	}
+
+	return headp, nil
+}
+
+func unmhead(headb []byte) (model.Header, error) {
+	var headp model.Header
+	if err := json.Unmarshal(headb, &headp); err != nil {
+		return model.Header{}, fmt.Errorf("could not unmarshal head: %w", err)
+	}
+	return headp, nil
+}
+
+func ppld(pld string) (model.Payload, error) {
+	pldb, err := decode(pld)
+	if err != nil {
+		return model.Payload{}, fmt.Errorf("could not decode payload: %w", err)
+	}
+
+	pldp, err := unmpld(pldb)
+	if err != nil {
+		return model.Payload{}, fmt.Errorf("could not unmarhsal payload: %w", err)
+	}
+
+	return pldp, nil
+}
+
+func unmpld(pldb []byte) (model.Payload, error) {
+	var pldp model.Payload
+	if err := json.Unmarshal(pldb, &pldp); err != nil {
+		return model.Payload{}, fmt.Errorf("could not unmarshal payload: %w", err)
+	}
+	return pldp, nil
+}
+
+func decode(src string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(src)
 }
 
 func validateSynchronization(cur, next model.Synchronization) bool {
