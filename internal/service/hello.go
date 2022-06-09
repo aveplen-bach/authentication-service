@@ -38,8 +38,7 @@ func (h *HelloService) Hello(userID uint) (HelloCridentials, error) {
 	session.SessionKey = pbkdf2.Key([]byte("password"), []byte("salt"), 4096, 16, sha1.New)
 	session.IV = make([]byte, 16)
 
-	admin := true
-	token, err := h.ts.GenerateToken(now, admin)
+	token, err := h.ts.GenerateAdminToken(now)
 	if err != nil {
 		return HelloCridentials{}, fmt.Errorf("could not generate token: %w", err)
 	}

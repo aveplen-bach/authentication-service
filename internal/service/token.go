@@ -24,8 +24,22 @@ func NewTokenService(ss *SessionService) *TokenService {
 	}
 }
 
-func (t *TokenService) GenerateToken(userID uint, admin bool) (string, error) {
-	raw, err := construct(userID, admin)
+func (t *TokenService) GenerateAdminToken(userID uint) (string, error) {
+	return t.generateToken(userID, true)
+}
+
+func (t *TokenService) GenerateUserToken(userID uint) (string, error) {
+	return t.generateToken(userID, false)
+}
+
+func (t *TokenService) generateToken(userID uint, admin bool) (string, error) {
+
+	raw, err := func() (model.TokenRaw, error) {
+		if admin {
+			return constructAdmin(userID)
+		}
+		return constructUser(userID)
+	}()
 	if err != nil {
 		return "", fmt.Errorf("could not construct token: %w", err)
 	}
@@ -344,10 +358,23 @@ func unpack(token string) (model.TokenProtected, error) {
 	}, nil
 }
 
+func constructAdmin(userID uint) (model.TokenRaw, error) {
+	return construct(userID, true)
+}
+
+func constructUser(userID uint) (model.TokenRaw, error) {
+	return construct(userID, false)
+}
+
 func construct(userID uint, admin bool) (model.TokenRaw, error) {
 	syn := constructSynchronization()
 	head := constructHead()
-	pld := constructPayload(userID, admin)
+	var pld model.Payload
+	if admin {
+		pld = constructAdminPayload(userID)
+	} else {
+		pld = constructUserPayload(userID)
+	}
 	sign, err := constructSignature(head, pld)
 	if err != nil {
 		return model.TokenRaw{}, fmt.Errorf("could not construct token: %w", err)
@@ -373,6 +400,14 @@ func constructHead() model.Header {
 		SignatureAlg:  "HMACSHA256",
 		EncryptionAlg: "AESCBC",
 	}
+}
+
+func constructAdminPayload(userID uint) model.Payload {
+	return constructPayload(userID, true)
+}
+
+func constructUserPayload(userID uint) model.Payload {
+	return constructPayload(userID, false)
 }
 
 func constructPayload(userID uint, admin bool) model.Payload {

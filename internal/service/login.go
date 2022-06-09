@@ -145,7 +145,13 @@ func (ls *LoginService) handleCredentials(lreq *model.LoginRequest) (*model.Logi
 	}
 
 	// generate token
-	token, err := ls.token.GenerateToken(user.ID, user.Admin)
+	token, err := func() (string, error) {
+		if user.Admin {
+			return ls.token.GenerateAdminToken(user.ID)
+		} else {
+			return ls.token.GenerateUserToken(user.ID)
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
