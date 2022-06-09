@@ -19,5 +19,5 @@ type UserDto struct {
 	Username  string    `json:"username"`
 	Admin     bool      `json:"admin"`
 	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updateddAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
