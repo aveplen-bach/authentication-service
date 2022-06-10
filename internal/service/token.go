@@ -12,7 +12,6 @@ import (
 
 	"github.com/aveplen-bach/authentication-service/internal/cryptoutil"
 	"github.com/aveplen-bach/authentication-service/internal/model"
-	"github.com/sirupsen/logrus"
 )
 
 type TokenService struct {
@@ -70,20 +69,14 @@ func (t *TokenService) NextToken(token string) (string, error) {
 		return "", fmt.Errorf("could not unpack token: %w", err)
 	}
 
-	s, err := t.ss.Get(uint(protected.Payload.UserID))
-	if err != nil {
-		return "", fmt.Errorf("could not get session: %w", err)
-	}
-
-	raw, err := unprotect(protected, s.SessionKey, s.IV)
+	raw, err := t.unprotect(protected)
 	if err != nil {
 		return "", fmt.Errorf("could not unprotect token: %w", err)
 	}
 
-	raw.Synchronization.Syn += raw.Synchronization.Inc
-	raw.Synchronization.Inc = rand.Int()
+	raw = incsyn(raw)
 
-	reprotected, err := protect(raw, s.SessionKey, s.IV)
+	reprotected, err := t.protect(raw)
 	if err != nil {
 		return "", fmt.Errorf("could not reprotect token: %w", err)
 	}
@@ -93,10 +86,30 @@ func (t *TokenService) NextToken(token string) (string, error) {
 		return "", fmt.Errorf("could not pack token: %w", err)
 	}
 
-	logrus.Info("setting new current token for %d", protected.Payload.UserID)
-	s.Current = repacked
-
 	return repacked, nil
+}
+
+func (t *TokenService) unprotect(protected model.TokenProtected) (model.TokenRaw, error) {
+	s, err := t.ss.Get(uint(protected.Payload.UserID))
+	if err != nil {
+		return model.TokenRaw{}, fmt.Errorf("could not get session: %w", err)
+	}
+
+	return unprotect(protected, s.SessionKey, s.IV)
+}
+
+func (t *TokenService) protect(raw model.TokenRaw) (model.TokenProtected, error) {
+	s, err := t.ss.Get(uint(raw.Payload.UserID))
+	if err != nil {
+		return model.TokenProtected{}, fmt.Errorf("could not get session: %w", err)
+	}
+
+	return protect(raw, s.SessionKey, s.IV)
+}
+
+func incsyn(raw model.TokenRaw) model.TokenRaw {
+	raw.Synchronization.Syn += raw.Synchronization.Inc
+	return raw
 }
 
 func (t *TokenService) NextSyn(userID uint, protected []byte) ([]byte, error) {
@@ -304,76 +317,67 @@ func unprotect(protected model.TokenProtected, key, iv []byte) (model.TokenRaw, 
 }
 
 func pack(protected model.TokenProtected) (string, error) {
-	b64Syn := base64.StdEncoding.EncodeToString(protected.SynchronizationBytes)
+	res := make([]interface{}, 4)
+	mu := new(sync.Mutex)
+	wg := new(sync.WaitGroup)
 
-	headBytes, err := json.Marshal(protected.Header)
-	if err != nil {
-		return "", fmt.Errorf("could not marshal header part: %w", err)
+	errch := make(chan error, 2)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mu.Lock()
+		defer mu.Unlock()
+		res[0] = encode(protected.SynchronizationBytes)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mu.Lock()
+		defer mu.Unlock()
+
+		headb, err := mhead(protected.Header)
+		if err != nil {
+			errch <- fmt.Errorf("could not get byte representation of head: %w", err)
+			return
+		}
+
+		res[1] = encode(headb)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mu.Lock()
+		defer mu.Unlock()
+
+		pldb, err := mpld(protected.Payload)
+		if err != nil {
+			errch <- fmt.Errorf("could not get byte representation of payload: %w", err)
+			return
+		}
+
+		res[2] = encode(pldb)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mu.Lock()
+		defer mu.Unlock()
+		res[3] = encode(protected.SignatureBytes)
+	}()
+
+	wg.Wait()
+	for err := range errch {
+		return "", fmt.Errorf("could not get string representation of token: %w", err)
 	}
-	b64Head := base64.StdEncoding.EncodeToString(headBytes)
 
-	pldBytes, err := json.Marshal(protected.Payload)
-	if err != nil {
-		return "", fmt.Errorf("could not marshal payload part: %w", err)
-	}
-	b64Pld := base64.StdEncoding.EncodeToString(pldBytes)
-
-	b64Sig := base64.StdEncoding.EncodeToString(protected.SignatureBytes)
-
-	return fmt.Sprintf(
-		"%s.%s.%s.%s",
-		b64Syn,
-		b64Head,
-		b64Pld,
-		b64Sig,
-	), nil
+	return fmt.Sprintf("%s.%s.%s.%s", res...), nil
 }
 
-// Deprecated - use nunpack(token) instead
 func unpack(token string) (model.TokenProtected, error) {
-	tokenParts := strings.Split(token, ".")
-	if len(tokenParts) != 4 {
-		return model.TokenProtected{}, fmt.Errorf("token is damaged or of wrong format")
-	}
-
-	syn, err := base64.StdEncoding.DecodeString(tokenParts[0])
-	if err != nil {
-		return model.TokenProtected{}, fmt.Errorf("could not decode syn: %w", err)
-	}
-
-	headb, err := base64.StdEncoding.DecodeString(tokenParts[1])
-	if err != nil {
-		return model.TokenProtected{}, fmt.Errorf("could not decode header: %w", err)
-	}
-
-	var head model.Header
-	if err := json.Unmarshal(headb, &head); err != nil {
-		return model.TokenProtected{}, fmt.Errorf("could not unmarshal header: %w", err)
-	}
-
-	pldb, err := base64.StdEncoding.DecodeString(tokenParts[2])
-	if err != nil {
-		return model.TokenProtected{}, fmt.Errorf("could not decode payload: %w", err)
-	}
-	var payload model.Payload
-	if err := json.Unmarshal(pldb, &payload); err != nil {
-		return model.TokenProtected{}, fmt.Errorf("could not unmarshal payload: %w", err)
-	}
-
-	sign, err := base64.StdEncoding.DecodeString(tokenParts[3])
-	if err != nil {
-		return model.TokenProtected{}, fmt.Errorf("could not decode sign: %w", err)
-	}
-
-	return model.TokenProtected{
-		SynchronizationBytes: syn,
-		Header:               head,
-		Payload:              payload,
-		SignatureBytes:       sign,
-	}, nil
-}
-
-func nunpack(token string) (model.TokenProtected, error) {
 	tparts, err := lex(token)
 	if err != nil {
 		return model.TokenProtected{}, fmt.Errorf("could not lex: %w", err)
@@ -506,7 +510,7 @@ func parse(tparts tparts) (model.TokenProtected, error) {
 		synb, err := decode(tparts.syn)
 
 		if err != nil {
-			errch <- err
+			errch <- fmt.Errorf("could not construct instance of syn: %w", err)
 			return
 		}
 
@@ -520,7 +524,7 @@ func parse(tparts tparts) (model.TokenProtected, error) {
 		defer wg.Done()
 		head, err := phead(tparts.head)
 		if err != nil {
-			errch <- err
+			errch <- fmt.Errorf("could not construct instance of head: %w", err)
 			return
 		}
 
@@ -534,7 +538,7 @@ func parse(tparts tparts) (model.TokenProtected, error) {
 		defer wg.Done()
 		pld, err := ppld(tparts.pld)
 		if err != nil {
-			errch <- err
+			errch <- fmt.Errorf("could not construct instance of payload: %w", err)
 			return
 		}
 
@@ -549,7 +553,7 @@ func parse(tparts tparts) (model.TokenProtected, error) {
 		signb, err := decode(tparts.sign)
 
 		if err != nil {
-			errch <- err
+			errch <- fmt.Errorf("could not construct instance of signature: %w", err)
 			return
 		}
 
@@ -614,30 +618,74 @@ func decode(src string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(src)
 }
 
+func encode(src []byte) string {
+	return base64.StdEncoding.EncodeToString(src)
+}
+
+func mhead(head model.Header) ([]byte, error) {
+	headb, err := json.Marshal(head)
+	if err != nil {
+		return nil, fmt.Errorf("could not marshal header: %w", err)
+	}
+	return headb, nil
+}
+
+func mpld(pld model.Payload) ([]byte, error) {
+	headb, err := json.Marshal(pld)
+	if err != nil {
+		return nil, fmt.Errorf("could not marshal paylaod: %w", err)
+	}
+	return headb, nil
+}
+
 func validateSynchronization(cur, next model.Synchronization) bool {
 	return cur.Syn+cur.Inc == next.Syn
 }
 
-func validateSignature(signature []byte, header model.Header, payload model.Payload) (bool, error) {
-	headb, err := json.Marshal(header)
-	if err != nil {
-		return false, fmt.Errorf("could not marshal header: %w", err)
-	}
+func signatureIsValid(signature []byte, header model.Header, payload model.Payload) (bool, error) {
+	wg := new(sync.WaitGroup)
 
-	pldb, err := json.Marshal(payload)
-	if err != nil {
-		return false, fmt.Errorf("could not marshal payload: %w", err)
+	errch := make(chan error, 2)
+	defer close(errch)
+
+	headch := make(chan string)
+	defer close(headch)
+
+	pldch := make(chan string)
+	defer close(pldch)
+
+	wg.Add(1)
+	go func(header model.Header, headch chan<- string, errch chan<- error) {
+		defer wg.Done()
+		haedb, err := mhead(header)
+		if err != nil {
+			errch <- fmt.Errorf("could not get byte representation of header: %w", err)
+			return
+		}
+		headch <- encode(haedb)
+	}(header, headch, errch)
+
+	wg.Add(1)
+	go func(pld model.Payload, pldch chan<- string, errch chan<- error) {
+		defer wg.Done()
+		pldb, err := mpld(payload)
+		if err != nil {
+			errch <- fmt.Errorf("could not get byte representation of payload: %w", err)
+			return
+		}
+		pldch <- encode(pldb)
+	}(payload, pldch, errch)
+
+	wg.Wait()
+	for err := range errch {
+		return false, fmt.Errorf("could not construct hmac of original values: %w", err)
 	}
 
 	secret := "mysecret"
-	data := fmt.Sprintf(
-		"%s.%s",
-		base64.StdEncoding.EncodeToString(headb),
-		base64.StdEncoding.EncodeToString(pldb))
-
+	data := fmt.Sprintf("%s.%s", <-headch, <-pldch)
 	h := hmac.New(sha256.New, []byte(secret))
 	if _, err := h.Write([]byte(data)); err != nil {
-		return false, fmt.Errorf("could not create sign: %w", err)
+		return false, fmt.Errorf("could not construct hmac of original values: %w", err)
 	}
 
 	return hmac.Equal(signature, h.Sum(nil)), nil
