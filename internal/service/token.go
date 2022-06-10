@@ -80,6 +80,7 @@ func (t *TokenService) NextToken(token string) (string, error) {
 	}
 
 	raw.Synchronization.Syn += raw.Synchronization.Inc
+	raw.Synchronization.Inc = rand.Int()
 
 	reprotected, err := protect(raw, s.SessionKey, s.IV)
 	if err != nil {
@@ -182,9 +183,16 @@ func (t *TokenService) ValidateToken(token string) (bool, error) {
 		return false, fmt.Errorf("could not unprotect current token: %w", err)
 	}
 
-	if unprotected.Synchronization.Syn+unprotected.Synchronization.Inc != curunprot.Synchronization.Syn {
-		return false, fmt.Errorf("syn is invalid")
-	}
+	fmt.Println(curunprot)
+	fmt.Println(unprotected)
+
+	// if unprotected.Synchronization.Syn+unprotected.Synchronization.Inc != curunprot.Synchronization.Syn {
+	// 	return false, fmt.Errorf("syn is invalid")
+	// }
+
+	// if curunprot.Synchronization.Syn+curunprot.Synchronization.Inc != unprotected.Synchronization.Syn {
+	// 	return false, fmt.Errorf("syn is invalid")
+	// }
 
 	headb, err := json.Marshal(protected.Header)
 	if err != nil {
@@ -207,7 +215,11 @@ func (t *TokenService) ValidateToken(token string) (bool, error) {
 		return false, fmt.Errorf("could not create sign: %w", err)
 	}
 
-	return hmac.Equal(protected.SignatureBytes, h.Sum(nil)), nil
+	if !hmac.Equal(protected.SignatureBytes, h.Sum(nil)) {
+		return false, fmt.Errorf("signature is not valid")
+	}
+
+	return true, nil
 }
 
 func (t *TokenService) ValidateSyn(userID uint, protected []byte) (bool, error) {

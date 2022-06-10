@@ -18,5 +18,5 @@ type LoginResponse struct {
 	LoginMAC string `json:"loginMac,omitempty"`
 
 	// must be present at second serve message (server token stage)
-	Token string `json:"token"`
+	Token string `json:"token,omitempty"`
 }
