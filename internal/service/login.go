@@ -56,8 +56,6 @@ func (s *LoginService) Login(req *model.LoginRequest) (*model.LoginResponse, err
 	}
 }
 
-// client conn init stage
-
 func (ls *LoginService) handleConnectionInit(lreq *model.LoginRequest) (*model.LoginResponse, error) {
 	user, err := ls.us.GetUserByUsername(lreq.Username)
 	if err != nil {
@@ -69,6 +67,7 @@ func (ls *LoginService) handleConnectionInit(lreq *model.LoginRequest) (*model.L
 		return nil, err
 	}
 
+	ls.session.Destroy(user.ID)
 	session, err := ls.session.New(user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("could not initialize session: %w", err)
@@ -81,34 +80,28 @@ func (ls *LoginService) handleConnectionInit(lreq *model.LoginRequest) (*model.L
 	}, nil
 }
 
-// client cridentials stage
-
 func (ls *LoginService) handleCredentials(lreq *model.LoginRequest) (*model.LoginResponse, error) {
 	user, err := ls.us.GetUserByUsername(lreq.Username)
 	if err != nil {
 		return nil, fmt.Errorf("could not find user with given username: %w", err)
 	}
 
-	// get users session
 	session, err := ls.session.Get(user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("could not get user session: %w", err)
 	}
 
-	// derive session key
 	skey, err := deriveSessionKey([]byte(user.Password), session.LoginMAC)
 	if err != nil {
 		return nil, err
 	}
 
-	// save session key
 	session.SessionKey = skey
 
 	if lreq.EncryptedPhoto == nil {
 		return nil, fmt.Errorf("photo cipher is not present")
 	}
 
-	// decrypt photo
 	photoCipher, err := base64.StdEncoding.DecodeString(*lreq.EncryptedPhoto)
 	if err != nil {
 		return nil, err
@@ -129,7 +122,6 @@ func (ls *LoginService) handleCredentials(lreq *model.LoginRequest) (*model.Logi
 		return nil, fmt.Errorf("could not decrypt photo: %w", err)
 	}
 
-	// check photo
 	photoVector, err := ls.ps.ExtractVector(photo)
 	if err != nil {
 		return nil, fmt.Errorf("could not extract vector: %w", err)
@@ -144,7 +136,6 @@ func (ls *LoginService) handleCredentials(lreq *model.LoginRequest) (*model.Logi
 		return nil, fmt.Errorf("photo is not close enough")
 	}
 
-	// generate token
 	token, err := func() (string, error) {
 		if user.Admin {
 			return ls.token.GenerateAdminToken(user.ID)
