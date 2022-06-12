@@ -1,0 +1,16 @@
+server:
+  api_addr: ":8081"
+  grpc_addr: ":30030"
+
+database:
+  port: 5432
+  host: localhost
+  name: postgres
+  user: user
+  password: user
+
+sjwt:
+  secret: mysecret
+
+config-client:
+  addr: localhost:30032
