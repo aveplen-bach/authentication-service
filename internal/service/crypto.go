@@ -21,7 +21,7 @@ func (cs *CryptoService) Encrypt(userID uint, opentext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not get session: %w", err)
 	}
-	return cryptoutil.EncryptAesCbc(opentext, session.SessionKey, session.IV)
+	return cryptoutil.EncryptAesCbc(opentext, session.Key, session.IV)
 }
 
 func (cs *CryptoService) Decrypt(userID uint, ciphertext []byte) ([]byte, error) {
@@ -29,5 +29,5 @@ func (cs *CryptoService) Decrypt(userID uint, ciphertext []byte) ([]byte, error)
 	if err != nil {
 		return nil, fmt.Errorf("could not get session: %w", err)
 	}
-	return cryptoutil.DecryptAesCbc(ciphertext, session.SessionKey, session.IV)
+	return cryptoutil.DecryptAesCbc(ciphertext, session.Key, session.IV)
 }

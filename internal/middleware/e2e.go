@@ -8,12 +8,13 @@ import (
 
 	"github.com/aveplen-bach/authentication-service/internal/ginutil"
 	"github.com/aveplen-bach/authentication-service/internal/service"
+	"github.com/aveplen-bach/authentication-service/internal/util"
 	"github.com/sirupsen/logrus"
 
 	"github.com/gin-gonic/gin"
 )
 
-func EndToEndEncryption(ts *service.TokenService, cs *service.CryptoService) gin.HandlerFunc {
+func EndToEndEncryption(cs *service.CryptoService) gin.HandlerFunc {
 	logrus.Info("end to end enctyption middleware registered")
 
 	return func(c *gin.Context) {
@@ -28,7 +29,7 @@ func EndToEndEncryption(ts *service.TokenService, cs *service.CryptoService) gin
 			return
 		}
 
-		payload, err := ts.ExtractPayload(token)
+		payload, err := util.ExPld(token)
 		if err != nil {
 			logrus.Warn(err)
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{

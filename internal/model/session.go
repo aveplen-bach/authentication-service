@@ -1,8 +1,8 @@
 package model
 
 type SessionEntry struct {
-	LoginMAC   string
-	SessionKey []byte
-	IV         []byte
-	Current    string
+	LoginMAC string
+	Key      []byte
+	IV       []byte
+	Token    TokenRaw
 }

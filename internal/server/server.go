@@ -115,11 +115,10 @@ func Start(cfg config.Config) {
 	// ================================ service ===============================
 	userService := service.NewUserService(db)
 	sessionService := service.NewSessionService()
-	tokenService := service.NewTokenService(sessionService)
+	tokenService := service.NewTokenService(cfg, sessionService)
 	s3Service := service.NewS3Service(s3Client)
 	facerecService := service.NewFacerecService(facerecClient)
 	photoService := service.NewPhotoService(facerecService, s3Service)
-	authService := service.NewAuthService(tokenService)
 	loginService := service.NewLoginService(userService, sessionService, tokenService, photoService)
 	registerService := service.NewRegisterService(userService, photoService)
 	logouService := service.NewLogoutService(tokenService, sessionService)
@@ -143,20 +142,17 @@ func Start(cfg config.Config) {
 	open := r.Group("/api/open")
 
 	protected := r.Group("/api/protected")
-	protected.Use(middleware.AuthCheck(authService))
 	protected.Use(middleware.IncrementalToken(tokenService))
 
 	admin := r.Group("/api/admin")
-	admin.Use(middleware.AuthCheck(authService))
 	admin.Use(middleware.IncrementalToken(tokenService))
-	admin.Use(middleware.EndToEndEncryption(tokenService, cryptoService))
+	admin.Use(middleware.EndToEndEncryption(cryptoService))
 
 	local := r.Group("/api/local")
 
 	// ================================ routes ================================
 	open.POST("/login", controller.LoginUser(loginService))
 
-	protected.POST("/authenticated", controller.Authenticated(tokenService))
 	protected.POST("/logout", controller.Logout(logouService))
 
 	admin.POST("/user", controller.ListUsers(userService))

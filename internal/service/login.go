@@ -96,7 +96,7 @@ func (ls *LoginService) handleCredentials(lreq *model.LoginRequest) (*model.Logi
 		return nil, err
 	}
 
-	session.SessionKey = skey
+	session.Key = skey
 
 	if lreq.EncryptedPhoto == nil {
 		return nil, fmt.Errorf("photo cipher is not present")
@@ -136,15 +136,9 @@ func (ls *LoginService) handleCredentials(lreq *model.LoginRequest) (*model.Logi
 		return nil, fmt.Errorf("photo is not close enough")
 	}
 
-	token, err := func() (string, error) {
-		if user.Admin {
-			return ls.token.GenerateAdminToken(user.ID)
-		} else {
-			return ls.token.GenerateUserToken(user.ID)
-		}
-	}()
+	token, err := ls.token.Construct(user.ID, user.Admin)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not construct token: %w", err)
 	}
 
 	return &model.LoginResponse{

@@ -1,15 +1,15 @@
 package model
 
 type TokenProtected struct {
-	SynchronizationBytes []byte
-	Header               Header
-	Payload              Payload
-	SignatureBytes       []byte
+	SynBytes  []byte
+	Header    Header
+	Payload   Payload
+	SignBytes []byte
 }
 
 type Header struct {
-	SignatureAlg  string `json:"alg"`
-	EncryptionAlg string `json:"enc"`
+	SignAlg string `json:"alg"`
+	EncAlg  string `json:"enc"`
 }
 
 type Payload struct {
@@ -18,13 +18,13 @@ type Payload struct {
 }
 
 type TokenRaw struct {
-	Synchronization Synchronization
-	Header          Header
-	Payload         Payload
-	SignatureBytes  []byte
+	Syn    Syn
+	Header Header
+	Pld    Payload
+	Sign   []byte
 }
 
-type Synchronization struct {
+type Syn struct {
 	Syn int `json:"syn"`
 	Inc int `json:"inc"`
 }

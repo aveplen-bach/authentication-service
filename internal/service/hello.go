@@ -35,17 +35,17 @@ func (h *HelloService) Hello(userID uint) (HelloCridentials, error) {
 		return HelloCridentials{}, fmt.Errorf("could not get create session: %w", err)
 	}
 
-	session.SessionKey = pbkdf2.Key([]byte("password"), []byte("salt"), 4096, 16, sha1.New)
+	session.Key = pbkdf2.Key([]byte("password"), []byte("salt"), 4096, 16, sha1.New)
 	session.IV = make([]byte, 16)
 
-	token, err := h.ts.GenerateAdminToken(now)
+	token, err := h.ts.Construct(now, true)
 	if err != nil {
 		return HelloCridentials{}, fmt.Errorf("could not generate token: %w", err)
 	}
 
 	return HelloCridentials{
 		Token: token,
-		Key:   base64.StdEncoding.EncodeToString(session.SessionKey),
+		Key:   base64.StdEncoding.EncodeToString(session.Key),
 		IV:    base64.StdEncoding.EncodeToString(session.IV),
 	}, nil
 }
