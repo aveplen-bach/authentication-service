@@ -1,5 +1,7 @@
 package service
 
+import "github.com/aveplen-bach/authentication-service/internal/util"
+
 type LogoutService struct {
 	ts *TokenService
 	ss *SessionService
@@ -13,7 +15,7 @@ func NewLogoutService(ts *TokenService, ss *SessionService) *LogoutService {
 }
 
 func (ls *LogoutService) Logout(token string) error {
-	pld, err := ls.ts.ExtractPayload(token)
+	pld, err := util.ExPld(token)
 	if err != nil {
 		return err
 	}
