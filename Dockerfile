@@ -7,16 +7,8 @@ WORKDIR /go/src/github.com/aveplen-bach/authentication_service
 COPY go.mod go.mod
 COPY go.sum go.sum
 
-RUN go mod download
-
 COPY . ./
 
-RUN CGO_ENABLED=0 go build -o /bin/authentication_service \
-    /go/src/github.com/aveplen-bach/authentication_service/cmd/main.go
+RUN go build -o bin/auth cmd/main.go
 
-FROM alpine:3.15.4 as runtime
-
-COPY --from=builder /bin/authentication_service /bin/authentication_service
-COPY ./auth-service.yaml /bin/auth-service.yaml
-
-ENTRYPOINT [ "/bin/authentication_service" ]
+ENTRYPOINT [ "go", "run", "cmd/main.go" ]
