@@ -17,5 +17,6 @@ RUN CGO_ENABLED=0 go build -o /bin/authentication_service \
 FROM alpine:3.15.4 as runtime
 
 COPY --from=builder /bin/authentication_service /bin/authentication_service
+COPY ./auth-service.yaml /bin/auth-service.yaml
 
 ENTRYPOINT [ "/bin/authentication_service" ]
