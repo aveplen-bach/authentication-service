@@ -50,12 +50,11 @@ func Start(cfg config.Config) {
 		dialContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		s3Addr := "localhost:30031"
-		cc, err := grpc.DialContext(dialContext, s3Addr,
+		cc, err := grpc.DialContext(dialContext, cfg.S3ClientConfig.Addr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 		if err != nil {
-			logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", s3Addr, err))
+			logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", cfg.S3ClientConfig.Addr, err))
 		}
 
 		s3ch <- s3file.NewS3GatewayClient(cc)
@@ -70,12 +69,11 @@ func Start(cfg config.Config) {
 		dialContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		frAddr := "localhost:30032"
-		cc, err := grpc.DialContext(dialContext, frAddr,
+		cc, err := grpc.DialContext(dialContext, cfg.FacerecClientConfig.Addr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 		if err != nil {
-			logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", frAddr, err))
+			logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", cfg.FacerecClientConfig.Addr, err))
 		}
 
 		frch <- facerec.NewFaceRecognitionClient(cc)
@@ -90,12 +88,11 @@ func Start(cfg config.Config) {
 		dialContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		cfgAddr := "localhost:30033"
-		cc, err := grpc.DialContext(dialContext, cfgAddr,
+		cc, err := grpc.DialContext(dialContext, cfg.ConfigClient.Addr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 		if err != nil {
-			logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", cfgAddr, err))
+			logrus.Warn(fmt.Errorf("failed to connecto to %s: %w", cfg.ConfigClient.Addr, err))
 		}
 
 		cfgch <- configpb.NewConfigClient(cc)
@@ -127,7 +124,7 @@ func Start(cfg config.Config) {
 
 	// ============================= grpc server ==============================
 
-	lis, err := net.Listen("tcp", "localhost:30030")
+	lis, err := net.Listen("tcp", cfg.ServerConfig.GrpcAddr)
 	if err != nil {
 		logrus.Fatalf("failed to listen: %v", err)
 	}
@@ -154,6 +151,9 @@ func Start(cfg config.Config) {
 	open.POST("/login", controller.LoginUser(loginService))
 
 	protected.POST("/logout", controller.Logout(logouService))
+	protected.POST("/test", func(c *gin.Context) {
+		fmt.Println("what is going on?")
+	})
 
 	admin.POST("/user", controller.ListUsers(userService))
 	admin.POST("/register", controller.RegisterUser(registerService))
@@ -162,7 +162,7 @@ func Start(cfg config.Config) {
 
 	// =============================== shutdown ===============================
 	srv := &http.Server{
-		Addr:    ":8081",
+		Addr:    cfg.ServerConfig.ApiAddr,
 		Handler: r,
 	}
 

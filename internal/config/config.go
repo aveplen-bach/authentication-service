@@ -7,10 +7,12 @@ import (
 
 type (
 	Config struct {
-		DatabaseConfig ConfigDatabase     `yaml:"database"`
-		ServerConfig   ServerConfig       `yaml:"server"`
-		SJWTConfig     SJWTConfig         `yaml:"sjwt"`
-		ConfigClient   ConfigClientConfig `yaml:"config-client"`
+		DatabaseConfig      ConfigDatabase      `yaml:"database"`
+		ServerConfig        ServerConfig        `yaml:"server"`
+		SJWTConfig          SJWTConfig          `yaml:"sjwt"`
+		ConfigClient        ConfigClientConfig  `yaml:"config-client"`
+		S3ClientConfig      S3ClientConfig      `yaml:"s3-client"`
+		FacerecClientConfig FacerecClientConfig `yaml:"facerec-client"`
 	}
 
 	ConfigDatabase struct {
@@ -22,22 +24,30 @@ type (
 	}
 
 	ServerConfig struct {
-		GrpcAddr string `yaml:"grpc_addr" env-defaul:":30030"`
-		ApiAddr  string `yaml:"api_addr" env-defaul:":8081"`
+		GrpcAddr string `yaml:"grpc_addr" env:"GRPC_LISTEN_ADDR" env-defaul:":30031"`
+		ApiAddr  string `yaml:"api_addr" env:"HTTP_LISTEN_ADDR" env-defaul:":8081"`
 	}
 
 	SJWTConfig struct {
-		Secret string `yaml:"secret" env-default:"mysecret"`
+		Secret string `yaml:"secret" env:"SJWT_SECRET" env-default:"mysecret"`
 	}
 
 	ConfigClientConfig struct {
-		Addr string `yaml:"addr" env-default:"localhost:30032"`
+		Addr string `yaml:"addr" env:"CONFIG_CLIENT_ADDR" env-default:"localhost:30032"`
+	}
+
+	S3ClientConfig struct {
+		Addr string `yaml:"addr" env:"S3_CLIENT_ADDR" env-default:"localhost:30033"`
+	}
+
+	FacerecClientConfig struct {
+		Addr string `yaml:"addr" env:"FACEREC_CLIENT_ADDR" env-default:"localhost:30034"`
 	}
 )
 
 func ReadConfig(path string) (Config, error) {
 	var cfg Config
-	err := cleanenv.ReadConfig("config.yml", &cfg)
+	err := cleanenv.ReadConfig("auth-service.yaml", &cfg)
 	if err != nil {
 		logrus.Fatal(err)
 	}
