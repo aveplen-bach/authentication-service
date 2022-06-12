@@ -7,7 +7,10 @@ import (
 
 type (
 	Config struct {
-		Database ConfigDatabase `yaml:"database"`
+		DatabaseConfig ConfigDatabase     `yaml:"database"`
+		ServerConfig   ServerConfig       `yaml:"server"`
+		SJWTConfig     SJWTConfig         `yaml:"sjwt"`
+		ConfigClient   ConfigClientConfig `yaml:"config-client"`
 	}
 
 	ConfigDatabase struct {
@@ -16,6 +19,19 @@ type (
 		Name     string `yaml:"name" env:"DBNAME" env-default:"postgres"`
 		User     string `yaml:"user" env:"DBUSER" env-default:"user"`
 		Password string `yaml:"password" env:"DBPASSWORD"`
+	}
+
+	ServerConfig struct {
+		GrpcAddr string `yaml:"grpc_addr" env-defaul:":30030"`
+		ApiAddr  string `yaml:"api_addr" env-defaul:":8081"`
+	}
+
+	SJWTConfig struct {
+		Secret string `yaml:"secret" env-default:"mysecret"`
+	}
+
+	ConfigClientConfig struct {
+		Addr string `yaml:"addr" env-default:"localhost:30032"`
 	}
 )
 
