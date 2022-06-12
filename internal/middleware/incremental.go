@@ -46,8 +46,6 @@ func IncrementalToken(ts *service.TokenService) gin.HandlerFunc {
 			logrus.Fatal(err)
 		}
 
-		// я хочу умереть, глядя на этот код, но чтобы сделать переписать его красиво,
-		// нужно время, которого у меня нет)))
 		var newresb []byte
 		if len(resb) == 0 {
 			newresb, err = json.Marshal(gin.H{

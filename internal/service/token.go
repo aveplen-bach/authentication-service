@@ -17,6 +17,7 @@ import (
 
 type TokenService struct {
 	ss *SessionService
+	cs *CryptoService
 }
 
 func NewTokenService(ss *SessionService) *TokenService {
@@ -103,7 +104,7 @@ func (t *TokenService) NextSyn(userID uint, protected []byte) ([]byte, error) {
 		return nil, fmt.Errorf("could not get session: %w", err)
 	}
 
-	raw, err := cryptoutil.DecryptAesCbc(protected, s.SessionKey, s.IV)
+	raw, err := t.cs.Decrypt(userID, protected)
 	if err != nil {
 		return nil, fmt.Errorf("could not decrypt syn: %w", err)
 	}
@@ -120,7 +121,7 @@ func (t *TokenService) NextSyn(userID uint, protected []byte) ([]byte, error) {
 		return nil, fmt.Errorf("could not marshal syn: %w", err)
 	}
 
-	updatedProtected, err := cryptoutil.EncryptAesCbc(updatedRaw, s.SessionKey, s.IV)
+	updatedProtected, err := t.cs.Encrypt(userID, updatedRaw)
 	if err != nil {
 		return nil, fmt.Errorf("could not encrypt syn: %w", err)
 	}

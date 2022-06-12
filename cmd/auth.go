@@ -31,7 +31,6 @@ import (
 
 func main() {
 	// =============================== database ===============================
-
 	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 	if err != nil {
 		panic("Failed to connect database")
@@ -40,7 +39,6 @@ func main() {
 	db.AutoMigrate(&model.User{})
 
 	// ============================== s3g client ==============================
-
 	var wg sync.WaitGroup
 
 	s3ch := make(chan s3file.S3GatewayClient)
@@ -63,7 +61,6 @@ func main() {
 	}()
 
 	// ============================== fr client ===============================
-
 	frch := make(chan facerec.FaceRecognitionClient)
 	wg.Add(1)
 	go func() {
@@ -84,7 +81,6 @@ func main() {
 	}()
 
 	// ========================== config client ===========================
-
 	cfgch := make(chan config.ConfigClient)
 	wg.Add(1)
 	go func() {
@@ -105,7 +101,6 @@ func main() {
 	}()
 
 	// ============================== client wait =============================
-
 	s3 := <-s3ch
 	fr := <-frch
 	cfg := <-cfgch
@@ -117,19 +112,18 @@ func main() {
 	logrus.Warn("config server: ", cfg)
 
 	// ================================ service ===============================
-
-	us := service.NewUserService(db)
-	ss := service.NewSessionService()
-	ts := service.NewTokenService(ss)
-	s3s := service.NewS3Service(s3)
-	fs := service.NewFacerecService(fr)
-	ps := service.NewPhotoService(fs, s3s)
-	as := service.NewAuthService(ts)
-	ls := service.NewLoginService(us, ss, ts, ps)
-	rs := service.NewRegisterService(us, ps)
-	s := service.NewService(ts)
-	los := service.NewLogoutService(ts, ss)
-	hs := service.NewHelloService(ss, ts)
+	userService := service.NewUserService(db)
+	sessionService := service.NewSessionService()
+	tokenService := service.NewTokenService(sessionService)
+	s3Service := service.NewS3Service(s3)
+	facerecService := service.NewFacerecService(fr)
+	photoService := service.NewPhotoService(facerecService, s3Service)
+	authService := service.NewAuthService(tokenService)
+	loginService := service.NewLoginService(userService, sessionService, tokenService, photoService)
+	registerService := service.NewRegisterService(userService, photoService)
+	logouService := service.NewLogoutService(tokenService, sessionService)
+	helloService := service.NewHelloService(sessionService, tokenService)
+	cryptoService := service.NewCryptoService(sessionService)
 
 	// ============================= grpc server ==============================
 
@@ -139,39 +133,37 @@ func main() {
 	}
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
-	auth.RegisterAuthenticationServer(grpcServer, transport.NewAuthenticationServer(s))
+	auth.RegisterAuthenticationServer(grpcServer, transport.NewAuthenticationServer(tokenService, cryptoService))
 
 	// ================================ router ================================
-
 	r := gin.Default()
 	r.Use(middleware.Cors())
 
-	protected := r.Group("/api/protected")
-	protected.Use(middleware.AuthCheck(as))
-	protected.Use(middleware.IncrementalToken(ts))
-
 	open := r.Group("/api/open")
 
+	protected := r.Group("/api/protected")
+	protected.Use(middleware.AuthCheck(authService))
+	protected.Use(middleware.IncrementalToken(tokenService))
+
 	admin := r.Group("/api/admin")
-	admin.Use(middleware.IncrementalToken(ts))
-	admin.Use(middleware.AuthCheck(as))
-	admin.Use(middleware.EndToEndEncryption(ts, ss))
+	admin.Use(middleware.AuthCheck(authService))
+	admin.Use(middleware.IncrementalToken(tokenService))
+	admin.Use(middleware.EndToEndEncryption(tokenService, cryptoService))
 
 	local := r.Group("/api/local")
+
 	// ================================ routes ================================
+	open.POST("/login", controller.LoginUser(loginService))
 
-	protected.POST("/authenticated", controller.Authenticated(ts))
-	protected.POST("/logout", controller.Logout(los))
+	protected.POST("/authenticated", controller.Authenticated(tokenService))
+	protected.POST("/logout", controller.Logout(logouService))
 
-	open.POST("/login", controller.LoginUser(ls))
+	admin.POST("/user", controller.ListUsers(userService))
+	admin.POST("/register", controller.RegisterUser(registerService))
 
-	admin.POST("/user", controller.ListUsers(us))
-	admin.POST("/register", controller.RegisterUser(rs))
-
-	local.POST("/hello", controller.Hello(hs))
+	local.POST("/hello", controller.Hello(helloService))
 
 	// =============================== shutdown ===============================
-
 	srv := &http.Server{
 		Addr:    ":8081",
 		Handler: r,
