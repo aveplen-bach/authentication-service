@@ -16,7 +16,6 @@ import (
 
 type TokenService struct {
 	ss  *SessionService
-	cs  *CryptoService
 	cfg config.Config
 }
 

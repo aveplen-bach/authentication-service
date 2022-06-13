@@ -9,15 +9,18 @@ import (
 type PhotoService struct {
 	fs *FacerecService
 	s3 *S3Service
+	cs *ConfigurationService
 }
 
 func NewPhotoService(
 	fs *FacerecService,
 	s3 *S3Service,
+	cs *ConfigurationService,
 ) *PhotoService {
 	return &PhotoService{
 		fs: fs,
 		s3: s3,
+		cs: cs,
 	}
 }
 
@@ -45,5 +48,11 @@ func (ps *PhotoService) PhotoIsCloseEnough(dbVector, photoVector []float64) (boo
 		return false, fmt.Errorf("could not get distance: %w", err)
 	}
 
-	return distance < 0.6, nil
+	threshold, err := ps.cs.GetFacerecThreshold()
+	if err != nil {
+		logrus.Error("could not get facerec threshold")
+		return false, fmt.Errorf("could not get facerec threshold: %w", err)
+	}
+
+	return distance < threshold, nil
 }
