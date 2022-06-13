@@ -6,8 +6,6 @@ import (
 )
 
 func Cors() gin.HandlerFunc {
-	logrus.Info("cors middleware registered")
-
 	return func(c *gin.Context) {
 		logrus.Info("cors middleware triggered")
 

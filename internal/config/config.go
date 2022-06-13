@@ -46,9 +46,14 @@ type (
 )
 
 func ReadConfig(path string) (Config, error) {
+	logrus.Infof("reading config from %s", path)
 	var cfg Config
-	err := cleanenv.ReadConfig("auth-service.yaml", &cfg)
-	if err != nil {
+	if err := cleanenv.ReadConfig("auth-service.yaml", &cfg); err != nil {
+		logrus.Fatal(err)
+	}
+
+	logrus.Info("reading env")
+	if err := cleanenv.ReadEnv(&cfg); err != nil {
 		logrus.Fatal(err)
 	}
 

@@ -4,16 +4,21 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"fmt"
+
+	"github.com/sirupsen/logrus"
 )
 
 func EncryptAesCbc(plaintext, key, iv []byte) ([]byte, error) {
+	logrus.Info("encrypting aes cbc")
 	padded, err := addPadding(plaintext, aes.BlockSize)
 	if err != nil {
+		logrus.Errorf("cannot add padding: %w", err)
 		return nil, fmt.Errorf("cannot add padding: %w", err)
 	}
 
 	c, err := aes.NewCipher(key)
 	if err != nil {
+		logrus.Errorf("cannot create cipher: %w", err)
 		return nil, fmt.Errorf("cannot create cipher: %w", err)
 	}
 
@@ -26,8 +31,10 @@ func EncryptAesCbc(plaintext, key, iv []byte) ([]byte, error) {
 }
 
 func DecryptAesCbc(ciphertext, key, iv []byte) ([]byte, error) {
+	logrus.Info("decrypting aes cbc")
 	c, err := aes.NewCipher(key)
 	if err != nil {
+		logrus.Errorf("cannot create cipher: %w", err)
 		return nil, fmt.Errorf("cannot create cipher: %w", err)
 	}
 
@@ -38,14 +45,17 @@ func DecryptAesCbc(ciphertext, key, iv []byte) ([]byte, error) {
 
 	unpadded, err := removePadding(out, aes.BlockSize)
 	if err != nil {
-		return nil, err
+		logrus.Errorf("cannot remove padding: %w", err)
+		return nil, fmt.Errorf("cannot remove padding: %w", err)
 	}
 
 	return unpadded, nil
 }
 
 func addPadding(plaintext []byte, blockSize int) ([]byte, error) {
+	logrus.Info("adding padding")
 	if blockSize <= 0 {
+		logrus.Errorf("invalid block size")
 		return nil, fmt.Errorf("invalid block size")
 	}
 	if len(plaintext) == 0 {
@@ -65,23 +75,28 @@ func addPadding(plaintext []byte, blockSize int) ([]byte, error) {
 }
 
 func removePadding(ciphertext []byte, blockSize int) ([]byte, error) {
+	logrus.Info("removing padding")
 	if blockSize <= 0 {
+		logrus.Errorf("invalid block size")
 		return nil, fmt.Errorf("invalid block size")
 	}
 	if len(ciphertext) == 0 {
 		return []byte{}, nil
 	}
 	if len(ciphertext)%blockSize != 0 {
+		logrus.Errorf("invalid data")
 		return nil, fmt.Errorf("invalid data")
 	}
 
 	c := ciphertext[len(ciphertext)-1]
 	n := int(c)
 	if n == 0 || n > len(ciphertext) {
+		logrus.Errorf("invalid data")
 		return nil, fmt.Errorf("invalid PKCS7 data")
 	}
 	for i := 0; i < n; i++ {
 		if ciphertext[len(ciphertext)-n+i] != c {
+			logrus.Errorf("invalid data")
 			return nil, fmt.Errorf("invalid PKCS7 data")
 		}
 	}

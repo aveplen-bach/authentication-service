@@ -32,6 +32,7 @@ import (
 
 func Start(cfg config.Config) {
 	// =============================== database ===============================
+	logrus.Info("connecting to database")
 	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 	if err != nil {
 		panic("Failed to connect database")
@@ -42,12 +43,13 @@ func Start(cfg config.Config) {
 	// ============================== s3g client ==============================
 	var wg sync.WaitGroup
 
+	logrus.Info("connecting s3 gateway")
 	s3ch := make(chan s3file.S3GatewayClient)
 	wg.Add(1)
 	go func() {
 		wg.Done()
 
-		dialContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		dialContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		cc, err := grpc.DialContext(dialContext, cfg.S3ClientConfig.Addr,
@@ -61,12 +63,13 @@ func Start(cfg config.Config) {
 	}()
 
 	// ============================== fr client ===============================
+	logrus.Info("connecting facerec service")
 	frch := make(chan facerec.FaceRecognitionClient)
 	wg.Add(1)
 	go func() {
 		wg.Done()
 
-		dialContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		dialContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		cc, err := grpc.DialContext(dialContext, cfg.FacerecClientConfig.Addr,
@@ -80,12 +83,13 @@ func Start(cfg config.Config) {
 	}()
 
 	// ========================== config client ===========================
+	logrus.Info("connecting config service")
 	cfgch := make(chan configpb.ConfigClient)
 	wg.Add(1)
 	go func() {
 		wg.Done()
 
-		dialContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		dialContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		cc, err := grpc.DialContext(dialContext, cfg.ConfigClient.Addr,
@@ -110,6 +114,7 @@ func Start(cfg config.Config) {
 	logrus.Warn("config server: ", configClient)
 
 	// ================================ service ===============================
+	logrus.Info("creating services")
 	userService := service.NewUserService(db)
 	sessionService := service.NewSessionService()
 	tokenService := service.NewTokenService(cfg, sessionService)
@@ -123,7 +128,7 @@ func Start(cfg config.Config) {
 	cryptoService := service.NewCryptoService(sessionService)
 
 	// ============================= grpc server ==============================
-
+	logrus.Info("creating grpc server")
 	lis, err := net.Listen("tcp", cfg.ServerConfig.GrpcAddr)
 	if err != nil {
 		logrus.Fatalf("failed to listen: %v", err)
@@ -133,6 +138,7 @@ func Start(cfg config.Config) {
 	auth.RegisterAuthenticationServer(grpcServer, transport.NewAuthenticationServer(tokenService, cryptoService))
 
 	// ================================ router ================================
+	logrus.Info("creating router")
 	r := gin.Default()
 	r.Use(middleware.Cors())
 
@@ -148,6 +154,7 @@ func Start(cfg config.Config) {
 	local := r.Group("/api/local")
 
 	// ================================ routes ================================
+	logrus.Info("registering routes")
 	open.POST("/login", controller.LoginUser(loginService))
 
 	protected.POST("/logout", controller.Logout(logouService))
@@ -167,6 +174,7 @@ func Start(cfg config.Config) {
 	}
 
 	go func() {
+		logrus.Infof("listening: %s\n", grpcServer)
 		grpcServer.Serve(lis)
 	}()
 

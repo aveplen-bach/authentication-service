@@ -13,15 +13,18 @@ func ExtractToken(c *gin.Context) (string, error) {
 
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
+		logrus.Errorf("authorization header is empty")
 		return "", fmt.Errorf("authorization header is empty")
 	}
 
 	authHeaderParts := strings.Split(authHeader, " ")
 	if len(authHeaderParts) != 2 {
+		logrus.Errorf("token bearer scheme violated")
 		return "", fmt.Errorf("token bearer scheme violated")
 	}
 
 	if authHeaderParts[0] != "Bearer" {
+		logrus.Errorf("token is not bearer")
 		return "", fmt.Errorf("token is not bearer")
 	}
 

@@ -2,9 +2,11 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/aveplen-bach/authentication-service/protos/s3file"
+	"github.com/sirupsen/logrus"
 )
 
 type S3Service struct {
@@ -18,13 +20,15 @@ func NewS3Service(s3 s3file.S3GatewayClient) *S3Service {
 }
 
 func (s3 *S3Service) Upload(photo []byte) (uint64, error) {
+	logrus.Info("uploading photo")
 	id := uint64(time.Now().Unix())
 
 	if _, err := s3.s3.PutImageObject(context.Background(), &s3file.ImageObject{
 		Id:       id,
 		Contents: photo,
 	}); err != nil {
-		return 0, err
+		logrus.Errorf("could not upload photo: %w", err)
+		return 0, fmt.Errorf("could not upload photo: %w", err)
 	}
 
 	return id, nil

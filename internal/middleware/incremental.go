@@ -13,14 +13,12 @@ import (
 )
 
 func IncrementalToken(ts *service.TokenService) gin.HandlerFunc {
-	logrus.Info("incremental token middleware registered")
-
 	return func(c *gin.Context) {
-		logrus.Info("incremental token middleware triggered")
+		logrus.Info("incremental token")
 
 		token, err := ginutil.ExtractToken(c)
 		if err != nil {
-			logrus.Warn(err)
+			logrus.Errorf("could not extract token: %w", err)
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
@@ -29,7 +27,7 @@ func IncrementalToken(ts *service.TokenService) gin.HandlerFunc {
 
 		next, err := ts.NextToken(token)
 		if err != nil {
-			logrus.Warn(err)
+			logrus.Errorf("could not get next token: %w", err)
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})

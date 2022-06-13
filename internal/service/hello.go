@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -28,10 +29,12 @@ type HelloCridentials struct {
 }
 
 func (h *HelloService) Hello(userID uint) (HelloCridentials, error) {
+	logrus.Info("generating hello session context")
 	now := uint(time.Now().Unix())
 
 	session, err := h.ss.New(now)
 	if err != nil {
+		logrus.Errorf("could not get create session: %w", err)
 		return HelloCridentials{}, fmt.Errorf("could not get create session: %w", err)
 	}
 
@@ -40,6 +43,7 @@ func (h *HelloService) Hello(userID uint) (HelloCridentials, error) {
 
 	token, err := h.ts.Construct(now, true)
 	if err != nil {
+		logrus.Errorf("could not generate token: %w", err)
 		return HelloCridentials{}, fmt.Errorf("could not generate token: %w", err)
 	}
 

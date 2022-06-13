@@ -15,14 +15,12 @@ import (
 )
 
 func EndToEndEncryption(cs *service.CryptoService) gin.HandlerFunc {
-	logrus.Info("end to end enctyption middleware registered")
-
 	return func(c *gin.Context) {
 		logrus.Info("end to end enctyption middleware triggered")
 
 		token, err := ginutil.ExtractToken(c)
 		if err != nil {
-			logrus.Warn(err)
+			logrus.Errorf("could not extract token: %w", err)
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
@@ -31,7 +29,7 @@ func EndToEndEncryption(cs *service.CryptoService) gin.HandlerFunc {
 
 		payload, err := util.ExPld(token)
 		if err != nil {
-			logrus.Warn(err)
+			logrus.Errorf("could not extract payload from token: %w", err)
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
@@ -45,7 +43,7 @@ func EndToEndEncryption(cs *service.CryptoService) gin.HandlerFunc {
 
 			b64EncReqBody, err := ioutil.ReadAll(c.Request.Body)
 			if err != nil {
-				logrus.Warn(err)
+				logrus.Errorf("could not read request body: %w", err)
 				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 					"err": err.Error(),
 				})
@@ -55,7 +53,7 @@ func EndToEndEncryption(cs *service.CryptoService) gin.HandlerFunc {
 
 			encReqBody, err := base64.StdEncoding.DecodeString(string(b64EncReqBody))
 			if err != nil {
-				logrus.Warn(err)
+				logrus.Errorf("could not decode request body: %w", err)
 				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 					"err": err.Error(),
 				})
@@ -64,7 +62,7 @@ func EndToEndEncryption(cs *service.CryptoService) gin.HandlerFunc {
 
 			reqBody, err := cs.Decrypt(uint(payload.UserID), encReqBody)
 			if err != nil {
-				logrus.Warn(err)
+				logrus.Errorf("could not decrypt request body: %w", err)
 				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 					"err": err.Error(),
 				})
@@ -83,7 +81,7 @@ func EndToEndEncryption(cs *service.CryptoService) gin.HandlerFunc {
 
 		decResBody, err := ioutil.ReadAll(bw.body)
 		if err != nil {
-			logrus.Warn(err)
+			logrus.Errorf("could not read response body: %w", err)
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
@@ -92,7 +90,7 @@ func EndToEndEncryption(cs *service.CryptoService) gin.HandlerFunc {
 
 		resBody, err := cs.Encrypt(uint(payload.UserID), decResBody)
 		if err != nil {
-			logrus.Warn(err)
+			logrus.Errorf("could not encrypt response body: %w", err)
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"err": err.Error(),
 			})
@@ -112,6 +110,6 @@ type bodyWriter struct {
 }
 
 func (w bodyWriter) Write(b []byte) (int, error) {
-	logrus.Info("piping body write into ")
+	logrus.Info("piping body write into buffer")
 	return w.body.Write(b)
 }

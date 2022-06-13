@@ -1,6 +1,11 @@
 package service
 
-import "github.com/aveplen-bach/authentication-service/internal/util"
+import (
+	"fmt"
+
+	"github.com/aveplen-bach/authentication-service/internal/util"
+	"github.com/sirupsen/logrus"
+)
 
 type LogoutService struct {
 	ts *TokenService
@@ -15,9 +20,11 @@ func NewLogoutService(ts *TokenService, ss *SessionService) *LogoutService {
 }
 
 func (ls *LogoutService) Logout(token string) error {
+	logrus.Info("handling logout")
 	pld, err := util.ExPld(token)
 	if err != nil {
-		return err
+		logrus.Errorf("could not extract payload: %w", err)
+		return fmt.Errorf("could not extract payload: %w", err)
 	}
 
 	ls.ss.Destroy(uint(pld.UserID))
