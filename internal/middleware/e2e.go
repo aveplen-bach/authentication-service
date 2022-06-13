@@ -14,7 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func EndToEndEncryption(cs *service.CryptoService) gin.HandlerFunc {
+func Encrypted(cs *service.CryptoService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logrus.Info("end to end enctyption middleware triggered")
 
