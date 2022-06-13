@@ -139,16 +139,16 @@ func Start(cfg config.Config) {
 	r := gin.Default()
 	r.Use(middleware.Cors())
 
-	open := r.Group("/api/open")
+	open := r.Group("/api/auth/open")
 
-	prot := r.Group("/api/prot")
+	prot := r.Group("/api/auth/prot")
 	prot.Use(middleware.Token(tokenService))
 
-	encr := r.Group("/api/encr")
+	encr := r.Group("/api/auth/encr")
 	encr.Use(middleware.Token(tokenService))
 	encr.Use(middleware.Encrypted(cryptoService))
 
-	locl := r.Group("/api/locl")
+	locl := r.Group("/api/auth/locl")
 	locl.Use(middleware.Localhost())
 
 	// ================================ routes ================================
