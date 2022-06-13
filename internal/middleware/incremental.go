@@ -12,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func IncrementalToken(ts *service.TokenService) gin.HandlerFunc {
+func Token(ts *service.TokenService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logrus.Info("incremental token")
 
