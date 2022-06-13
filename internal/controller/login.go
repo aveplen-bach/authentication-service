@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func LoginUser(ls *service.LoginService) gin.HandlerFunc {
+func Login(ls *service.LoginService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logrus.Info("login endpoint called")
 		req := &model.LoginRequest{}
