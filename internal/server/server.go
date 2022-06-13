@@ -144,28 +144,26 @@ func Start(cfg config.Config) {
 
 	open := r.Group("/api/open")
 
-	protected := r.Group("/api/protected")
-	protected.Use(middleware.IncrementalToken(tokenService))
+	prot := r.Group("/api/prot")
+	prot.Use(middleware.Token(tokenService))
 
-	admin := r.Group("/api/admin")
-	admin.Use(middleware.IncrementalToken(tokenService))
-	admin.Use(middleware.EndToEndEncryption(cryptoService))
+	encr := r.Group("/api/encr")
+	encr.Use(middleware.Token(tokenService))
+	encr.Use(middleware.Encrypted(cryptoService))
 
-	local := r.Group("/api/local")
+	locl := r.Group("/api/locl")
+	locl.Use(middleware.Localhost())
 
 	// ================================ routes ================================
 	logrus.Info("registering routes")
-	open.POST("/login", controller.LoginUser(loginService))
 
-	protected.POST("/logout", controller.Logout(logouService))
-	protected.POST("/test", func(c *gin.Context) {
-		fmt.Println("what is going on?")
-	})
+	open.POST("/login", controller.Login(loginService))
+	prot.GET("/logout", controller.Logout(logouService))
 
-	admin.POST("/user", controller.ListUsers(userService))
-	admin.POST("/register", controller.RegisterUser(registerService))
+	encr.GET("/users", middleware.Admin(), controller.ListUsers(userService))
+	encr.POST("/users", middleware.Admin(), controller.RegisterUser(registerService))
 
-	local.POST("/hello", controller.Hello(helloService))
+	locl.GET("/hello", controller.Hello(helloService))
 
 	// =============================== shutdown ===============================
 	srv := &http.Server{
