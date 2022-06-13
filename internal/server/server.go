@@ -109,10 +109,6 @@ func Start(cfg config.Config) {
 
 	wg.Wait()
 
-	logrus.Warn("face recognition server: ", facerecClient)
-	logrus.Warn("s3 gateway server: ", s3Client)
-	logrus.Warn("config server: ", configClient)
-
 	// ================================ service ===============================
 	logrus.Info("creating services")
 	userService := service.NewUserService(db)
