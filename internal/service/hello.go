@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aveplen-bach/authentication-service/internal/cryptoutil"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -39,7 +40,12 @@ func (h *HelloService) Hello(userID uint) (HelloCridentials, error) {
 	}
 
 	session.Key = pbkdf2.Key([]byte("password"), []byte("salt"), 4096, 16, sha1.New)
-	session.IV = make([]byte, 16)
+	randIV, err := cryptoutil.GenerateRandomString(16)
+	if err != nil {
+		logrus.Error("could not generate random string")
+		return HelloCridentials{}, fmt.Errorf("could not generate random string: %w", err)
+	}
+	session.IV = []byte(randIV)
 
 	token, err := h.ts.Construct(now, true)
 	if err != nil {
