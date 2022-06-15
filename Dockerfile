@@ -11,4 +11,7 @@ COPY . ./
 
 RUN go build -o bin/auth cmd/main.go
 
+RUN apt update
+RUN apt install curl
+
 ENTRYPOINT [ "go", "run", "cmd/main.go" ]
