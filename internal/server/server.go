@@ -26,14 +26,22 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"gorm.io/driver/sqlite"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func Start(cfg config.Config) {
 	// =============================== database ===============================
 	logrus.Info("connecting to database")
-	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
+
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
+		cfg.DatabaseConfig.Host,
+		cfg.DatabaseConfig.User,
+		cfg.DatabaseConfig.Password,
+		cfg.DatabaseConfig.Name,
+		cfg.DatabaseConfig.Port,
+	)
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		panic("Failed to connect database")
 	}
