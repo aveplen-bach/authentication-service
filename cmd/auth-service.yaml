@@ -1,0 +1,16 @@
+server:
+  grpc_addr: ":30031"
+  api_addr: ":8081"
+
+database:
+  port: 5432
+  host: localhost
+  name: authdb
+  user: authdb
+  password: authdb
+
+sjwt:
+  secret: mysecret
+
+config-client:
+  addr: localhost:30032
