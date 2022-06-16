@@ -45,7 +45,11 @@ func (h *HelloService) Hello(userID uint) (HelloCridentials, error) {
 		logrus.Error("could not generate random string")
 		return HelloCridentials{}, fmt.Errorf("could not generate random string: %w", err)
 	}
-	session.IV = []byte(randIV)
+	session.IV, err = base64.StdEncoding.DecodeString(randIV)
+	if err != nil {
+		logrus.Error("could not decode random iv")
+		return HelloCridentials{}, fmt.Errorf("could not decode random string: %w", err)
+	}
 
 	token, err := h.ts.Construct(now, true)
 	if err != nil {
