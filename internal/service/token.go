@@ -47,8 +47,8 @@ func (t *TokenService) NextToken(prev string) (string, error) {
 		return "", fmt.Errorf("could not unprotect prev token: %w", err)
 	}
 
-	if !valSyn(s.Token.Syn.Syn+s.Token.Syn.Inc, unprot.Syn) {
-		return "", fmt.Errorf("syn of prev token is not correct")
+	if s.Token.Syn.Syn+s.Token.Syn.Inc != unprot.Syn.Syn {
+		return "", fmt.Errorf("provided syn is not correct")
 	}
 
 	signval, err := valSign(
@@ -96,14 +96,14 @@ func (t *TokenService) NextSyn(userID uint, prev []byte) ([]byte, error) {
 		return nil, fmt.Errorf("could not unmarshal syn: %w", err)
 	}
 
-	if !valSyn(s.Token.Syn.Syn+s.Token.Syn.Inc, syn) {
-		return nil, fmt.Errorf("syn of prev token is not correct")
+	if s.Token.Syn.Syn+s.Token.Syn.Inc != syn.Syn {
+		return nil, fmt.Errorf("provided syn is not correct")
 	}
 
 	s.Token.Syn.Syn = syn.Syn + syn.Inc
 	s.Token.Syn.Inc = rand.Intn(1000)
 
-	synb, err = json.Marshal(syn)
+	synb, err = json.Marshal(s.Token.Syn)
 	if err != nil {
 		return nil, fmt.Errorf("could not marshal syn: %w", err)
 	}
@@ -282,7 +282,7 @@ func valSign(signature []byte, secret []byte, header model.Header, payload model
 		return false, fmt.Errorf("could not marshal payload: %w", err)
 	}
 
-	h := hmac.New(sha256.New, []byte(secret))
+	h := hmac.New(sha256.New, secret)
 
 	data := strings.Join(b64EncodeSlice([][]byte{headb, pldb}), ".")
 	if _, err := h.Write([]byte(data)); err != nil {
@@ -290,10 +290,6 @@ func valSign(signature []byte, secret []byte, header model.Header, payload model
 	}
 
 	return hmac.Equal(signature, h.Sum(nil)), nil
-}
-
-func valSyn(expect int, syn model.Syn) bool {
-	return expect == syn.Syn+syn.Inc
 }
 
 func b64EncodeSlice(bytes [][]byte) []string {
