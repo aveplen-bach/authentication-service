@@ -7,11 +7,18 @@ WORKDIR /go/src/github.com/aveplen-bach/authentication_service
 COPY go.mod go.mod
 COPY go.sum go.sum
 
+RUN go mod download
+
 COPY . ./
 
-RUN go build -o bin/auth cmd/main.go
+RUN CGO_ENABLED=0 go build -o /bin/authentication_service \
+    /go/src/github.com/aveplen-bach/authentication_service/cmd/main.go
 
-RUN apt update
-RUN apt install curl
+FROM alpine:3.15.4 as runtime
 
-ENTRYPOINT [ "go", "run", "cmd/main.go" ]
+RUN apk add curl
+
+COPY --from=builder /bin/authentication_service /bin/authentication_service
+COPY ./auth-service.yaml ./auth-service.yaml
+
+ENTRYPOINT [ "/bin/authentication_service" ]
