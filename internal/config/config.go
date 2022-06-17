@@ -13,6 +13,7 @@ type (
 		ConfigClient        ConfigClientConfig  `yaml:"config-client"`
 		S3ClientConfig      S3ClientConfig      `yaml:"s3-client"`
 		FacerecClientConfig FacerecClientConfig `yaml:"facerec-client"`
+		DebugConfig         DebugConfig         `yaml:"debug"`
 	}
 
 	ConfigDatabase struct {
@@ -42,6 +43,10 @@ type (
 
 	FacerecClientConfig struct {
 		Addr string `yaml:"addr" env:"FACEREC_CLIENT_ADDR" env-default:"localhost:30034"`
+	}
+
+	DebugConfig struct {
+		Debug bool `yaml:"debug" env:"DEBUG" env-default:"true"`
 	}
 )
 

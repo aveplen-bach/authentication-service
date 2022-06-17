@@ -31,6 +31,14 @@ import (
 )
 
 func Start(cfg config.Config) {
+  fmt.Println("cfg.ConfigDebug.Debug: ", cfg.DebugConfig.Debug)
+
+	// ================================ debug =================================
+
+	if !cfg.DebugConfig.Debug {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	// =============================== database ===============================
 	logrus.Info("connecting to database")
 
@@ -43,12 +51,21 @@ func Start(cfg config.Config) {
 	)
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		panic("Failed to connect database")
+		if cfg.DebugConfig.Debug {
+			logrus.Warn("failed to connect to database")
+		} else {
+			logrus.Panic("failed to connect database")
+		}
 	}
 
 	db.AutoMigrate(&model.User{})
 
 	// ============================== s3g client ==============================
+  timeout := 120 * time.Second
+	if cfg.DebugConfig.Debug {
+    timeout = 10 * time.Second
+	}
+
 	var wg sync.WaitGroup
 
 	logrus.Info("connecting s3 gateway")
@@ -57,7 +74,7 @@ func Start(cfg config.Config) {
 	go func() {
 		wg.Done()
 
-		dialContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		dialContext, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
 		cc, err := grpc.DialContext(dialContext, cfg.S3ClientConfig.Addr,
@@ -77,7 +94,7 @@ func Start(cfg config.Config) {
 	go func() {
 		wg.Done()
 
-		dialContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		dialContext, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
 		cc, err := grpc.DialContext(dialContext, cfg.FacerecClientConfig.Addr,
@@ -97,7 +114,7 @@ func Start(cfg config.Config) {
 	go func() {
 		wg.Done()
 
-		dialContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		dialContext, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
 		cc, err := grpc.DialContext(dialContext, cfg.ConfigClient.Addr,
@@ -169,6 +186,10 @@ func Start(cfg config.Config) {
 	encr.POST("/users", middleware.Admin(), controller.RegisterUser(registerService))
 
 	locl.GET("/hello", controller.Hello(helloService))
+
+	r.GET("/auth/health/live", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
 
 	// =============================== shutdown ===============================
 	srv := &http.Server{
