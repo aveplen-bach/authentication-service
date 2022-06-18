@@ -19,7 +19,7 @@ func Token(ts *service.TokenService) gin.HandlerFunc {
 		token, err := ginutil.ExtractToken(c)
 		if err != nil {
 			logrus.Errorf("could not extract token: %w", err)
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"err": err.Error(),
 			})
 			return
@@ -28,7 +28,7 @@ func Token(ts *service.TokenService) gin.HandlerFunc {
 		next, err := ts.NextToken(token)
 		if err != nil {
 			logrus.Errorf("could not get next token: %w", err)
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 				"err": err.Error(),
 			})
 			return

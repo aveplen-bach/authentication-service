@@ -12,5 +12,11 @@ database:
 sjwt:
   secret: mysecret
 
-config-client:
+s3-client:
   addr: localhost:30032
+
+config-client:
+  addr: localhost:30034
+
+facerec-client:
+  addr: localhost:30035

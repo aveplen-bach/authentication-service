@@ -15,7 +15,7 @@ func Login(ls *service.LoginService) gin.HandlerFunc {
 		req := &model.LoginRequest{}
 		if err := c.BindJSON(req); err != nil {
 			logrus.Errorf("could not response to login: %w", err)
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"err": err.Error(),
 			})
 			return
@@ -25,7 +25,7 @@ func Login(ls *service.LoginService) gin.HandlerFunc {
 
 		if err != nil {
 			logrus.Errorf("could not response to login: %w", err)
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 				"err": err.Error(),
 			})
 			return

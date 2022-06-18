@@ -16,7 +16,7 @@ func RegisterUser(rs *service.RegisterService) gin.HandlerFunc {
 		req := &model.RegisterRequest{}
 		if err := c.BindJSON(req); err != nil {
 			logrus.Info("could not respond to register: %w", err)
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"err": err.Error(),
 			})
 			return
@@ -24,7 +24,7 @@ func RegisterUser(rs *service.RegisterService) gin.HandlerFunc {
 
 		if err := rs.Register(req); err != nil {
 			logrus.Info("could not respond to register: %w", err)
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 				"err": err.Error(),
 			})
 			return

@@ -51,6 +51,9 @@ func (t *TokenService) NextToken(prev string) (string, error) {
 		return "", fmt.Errorf("provided syn is not correct")
 	}
 
+	s.Token.Syn.Syn = unprot.Syn.Syn + unprot.Syn.Inc
+	s.Token.Syn.Inc = rand.Intn(1000)
+
 	signval, err := valSign(
 		unprot.Sign,
 		[]byte(t.cfg.SJWTConfig.Secret),
@@ -63,9 +66,6 @@ func (t *TokenService) NextToken(prev string) (string, error) {
 	if !signval {
 		return "", fmt.Errorf("sign of prev token is not correct")
 	}
-
-	s.Token.Syn.Syn = unprot.Syn.Syn + unprot.Syn.Inc
-	s.Token.Syn.Inc = rand.Intn(1000)
 
 	reprotected, err := protect(s.Token, s.Key, s.IV)
 	if err != nil {

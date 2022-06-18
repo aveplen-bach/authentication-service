@@ -14,7 +14,7 @@ func Admin() gin.HandlerFunc {
 		token, err := ginutil.ExtractToken(c)
 		if err != nil {
 			logrus.Errorf("could not extract token: %w", err)
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"err": err.Error(),
 			})
 			return
@@ -23,7 +23,7 @@ func Admin() gin.HandlerFunc {
 		payload, err := util.ExPld(token)
 		if err != nil {
 			logrus.Errorf("could not extract payload from token: %w", err)
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"err": err.Error(),
 			})
 			return

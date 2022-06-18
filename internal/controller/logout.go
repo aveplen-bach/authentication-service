@@ -15,7 +15,7 @@ func Logout(ls *service.LogoutService) gin.HandlerFunc {
 		token, err := ginutil.ExtractToken(c)
 		if err != nil {
 			logrus.Warnf("could not respond to logout: %w", err)
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"err": err.Error(),
 			})
 			return
@@ -23,7 +23,7 @@ func Logout(ls *service.LogoutService) gin.HandlerFunc {
 
 		if err := ls.Logout(token); err != nil {
 			logrus.Warnf("could not respond to logout: %w", err)
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 				"err": err.Error(),
 			})
 			return

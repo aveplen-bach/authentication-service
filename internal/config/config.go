@@ -38,7 +38,7 @@ type (
 	}
 
 	S3ClientConfig struct {
-		Addr string `yaml:"addr" env:"S3_CLIENT_ADDR" env-default:"localhost:30033"`
+		Addr string `yaml:"addr" env:"S3_CLIENT_ADDR" env-default:"localhost:30032"`
 	}
 
 	FacerecClientConfig struct {

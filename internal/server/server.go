@@ -31,7 +31,7 @@ import (
 )
 
 func Start(cfg config.Config) {
-  fmt.Println("cfg.ConfigDebug.Debug: ", cfg.DebugConfig.Debug)
+	fmt.Println("cfg.ConfigDebug.Debug: ", cfg.DebugConfig.Debug)
 
 	// ================================ debug =================================
 
@@ -61,9 +61,9 @@ func Start(cfg config.Config) {
 	db.AutoMigrate(&model.User{})
 
 	// ============================== s3g client ==============================
-  timeout := 120 * time.Second
+	timeout := 120 * time.Second
 	if cfg.DebugConfig.Debug {
-    timeout = 10 * time.Second
+		timeout = 10 * time.Second
 	}
 
 	var wg sync.WaitGroup
@@ -181,6 +181,11 @@ func Start(cfg config.Config) {
 
 	open.POST("/login", controller.Login(loginService))
 	prot.GET("/logout", controller.Logout(logouService))
+	prot.GET("/authenticated", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"authenticated": true,
+		})
+	})
 
 	encr.GET("/users", middleware.Admin(), controller.ListUsers(userService))
 	encr.POST("/users", middleware.Admin(), controller.RegisterUser(registerService))

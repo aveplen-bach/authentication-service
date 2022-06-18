@@ -14,7 +14,7 @@ func ListUsers(us *service.UserService) gin.HandlerFunc {
 		users, err := us.GetAllUsers()
 		if err != nil {
 			logrus.Warnf("could not respond to user: %w", err)
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 				"err": err.Error(),
 			})
 			return
